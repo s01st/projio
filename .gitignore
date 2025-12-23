@@ -41,6 +41,8 @@ ENV/
 # nbdev
 _proc/
 .quarto/
+*.html.md
+site_libs/
 
 # Testing
 .pytest_cache/
