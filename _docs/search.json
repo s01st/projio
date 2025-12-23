@@ -1,0 +1,382 @@
+[
+  {
+    "objectID": "callbacks.html",
+    "href": "callbacks.html",
+    "title": "callbacks",
+    "section": "",
+    "text": "A callback that uses ProjectIO to place checkpoints and optionally tracks producers.\n\nsource\n\n\n\n IOCheckpointCallback (io:projio.core.ProjectIO|None=None,\n                       run:str|None=None,\n                       filename:str='{epoch:02d}-{step:06d}',\n                       datestamp:bool|None=None,\n                       track_producer:bool=False,\n                       producer_script:str|pathlib.Path|None=None)\n\n*Lightning callback that uses ProjectIO for checkpoint paths.\nThis callback integrates with ProjectIO to: - Place checkpoints in the configured checkpoint directory - Apply datestamp prefixes/directories as configured - Optionally track which training script produced each checkpoint\nParameters: io: ProjectIO instance (default: creates new one). run: Run name for subdirectory organization. filename: Checkpoint filename template with {epoch}, {step}, etc. datestamp: Override datestamp behavior. track_producer: Record producer info for checkpoints. producer_script: Script path to record as producer.\nExample: &gt;&gt;&gt; callback = IOCheckpointCallback(run=“experiment_1”) &gt;&gt;&gt; trainer = Trainer(callbacks=[callback])*",
+    "crumbs": [
+      "callbacks"
+    ]
+  },
+  {
+    "objectID": "callbacks.html#iocheckpointcallback",
+    "href": "callbacks.html#iocheckpointcallback",
+    "title": "callbacks",
+    "section": "",
+    "text": "A callback that uses ProjectIO to place checkpoints and optionally tracks producers.\n\nsource\n\n\n\n IOCheckpointCallback (io:projio.core.ProjectIO|None=None,\n                       run:str|None=None,\n                       filename:str='{epoch:02d}-{step:06d}',\n                       datestamp:bool|None=None,\n                       track_producer:bool=False,\n                       producer_script:str|pathlib.Path|None=None)\n\n*Lightning callback that uses ProjectIO for checkpoint paths.\nThis callback integrates with ProjectIO to: - Place checkpoints in the configured checkpoint directory - Apply datestamp prefixes/directories as configured - Optionally track which training script produced each checkpoint\nParameters: io: ProjectIO instance (default: creates new one). run: Run name for subdirectory organization. filename: Checkpoint filename template with {epoch}, {step}, etc. datestamp: Override datestamp behavior. track_producer: Record producer info for checkpoints. producer_script: Script path to record as producer.\nExample: &gt;&gt;&gt; callback = IOCheckpointCallback(run=“experiment_1”) &gt;&gt;&gt; trainer = Trainer(callbacks=[callback])*",
+    "crumbs": [
+      "callbacks"
+    ]
+  },
+  {
+    "objectID": "callbacks.html#iologcallback",
+    "href": "callbacks.html#iologcallback",
+    "title": "callbacks",
+    "section": "IOLogCallback",
+    "text": "IOLogCallback\nA callback that routes logs and tensorboard runs through ProjectIO.\n\nsource\n\nIOLogCallback\n\n IOLogCallback (io:projio.core.ProjectIO|None=None, run:str|None=None,\n                datestamp:bool|None=None)\n\n*Lightning callback that routes logs through ProjectIO.\nThis callback integrates with ProjectIO to: - Set up TensorBoard log directories - Apply datestamp prefixes/directories as configured - Provide consistent logging paths across experiments\nParameters: io: ProjectIO instance (default: creates new one). run: Run name for subdirectory organization. datestamp: Override datestamp behavior.\nExample: &gt;&gt;&gt; callback = IOLogCallback(run=“experiment_1”) &gt;&gt;&gt; trainer = Trainer(callbacks=[callback])*",
+    "crumbs": [
+      "callbacks"
+    ]
+  },
+  {
+    "objectID": "callbacks.html#integration-example",
+    "href": "callbacks.html#integration-example",
+    "title": "callbacks",
+    "section": "Integration Example",
+    "text": "Integration Example\n\n# Example of using both callbacks together\nimport tempfile\n\nwith tempfile.TemporaryDirectory() as tmp:\n    io = ProjectIO(root=tmp, use_datestamp=False, auto_create=True)\n    \n    ckpt_cb = IOCheckpointCallback(io=io, run=\"exp1\")\n    log_cb = IOLogCallback(io=io, run=\"exp1\")\n    \n    print(f\"Checkpoint dir: {ckpt_cb.checkpoint_dir}\")\n    print(f\"Log dir: {log_cb.log_dir}\")\n    print(f\"Checkpoint path (epoch 5, step 1000): {ckpt_cb.get_checkpoint_path(5, 1000)}\")\n\nCheckpoint dir: /private/var/folders/f7/7pcpvrhn0p9gw509gyzmh8fxrwyskv/T/tmpso0khhj8/lightning/checkpoints/exp1\nLog dir: /private/var/folders/f7/7pcpvrhn0p9gw509gyzmh8fxrwyskv/T/tmpso0khhj8/lightning/tensorboard/exp1\nCheckpoint path (epoch 5, step 1000): /private/var/folders/f7/7pcpvrhn0p9gw509gyzmh8fxrwyskv/T/tmpso0khhj8/lightning/checkpoints/exp1/05-001000.ckpt",
+    "crumbs": [
+      "callbacks"
+    ]
+  },
+  {
+    "objectID": "funcs.html",
+    "href": "funcs.html",
+    "title": "funcs",
+    "section": "",
+    "text": "source\n\n\n\n normalize_path (path:Union[str,pathlib.Path,NoneType],\n                 base:pathlib.Path|None=None)\n\n*Expand user, resolve against base when relative.\nParameters: path: Path to normalize (string or Path). If None, returns base or cwd. base: Base path to resolve relative paths against.\nReturns: Resolved absolute Path.*\n\n# Test normalize_path\nassert normalize_path(None) == Path.cwd()\nassert normalize_path(\"foo\", Path(\"/base\")) == Path(\"/base/foo\")\nassert normalize_path(\"/abs/path\", Path(\"/base\")) == Path(\"/abs/path\")\nprint(\"normalize_path tests passed\")",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "funcs.html#path-normalization",
+    "href": "funcs.html#path-normalization",
+    "title": "funcs",
+    "section": "",
+    "text": "source\n\n\n\n normalize_path (path:Union[str,pathlib.Path,NoneType],\n                 base:pathlib.Path|None=None)\n\n*Expand user, resolve against base when relative.\nParameters: path: Path to normalize (string or Path). If None, returns base or cwd. base: Base path to resolve relative paths against.\nReturns: Resolved absolute Path.*\n\n# Test normalize_path\nassert normalize_path(None) == Path.cwd()\nassert normalize_path(\"foo\", Path(\"/base\")) == Path(\"/base/foo\")\nassert normalize_path(\"/abs/path\", Path(\"/base\")) == Path(\"/abs/path\")\nprint(\"normalize_path tests passed\")",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "funcs.html#extension-handling",
+    "href": "funcs.html#extension-handling",
+    "title": "funcs",
+    "section": "Extension handling",
+    "text": "Extension handling\n\nsource\n\nensure_extension\n\n ensure_extension (name:str, ext:str|None)\n\n*Ensure filename has the given extension.\nExtension may be provided with or without leading dot. Returns unchanged name if ext is None/empty.\nParameters: name: Base filename. ext: Extension to ensure (with or without leading dot).\nReturns: Filename with proper extension.*\n\n# Test ensure_extension\nassert ensure_extension(\"model\", \".ckpt\") == \"model.ckpt\"\nassert ensure_extension(\"model\", \"ckpt\") == \"model.ckpt\"  # without dot\nassert ensure_extension(\"model.ckpt\", \".ckpt\") == \"model.ckpt\"  # already has it\nassert ensure_extension(\"model.old\", \".ckpt\") == \"model.ckpt\"  # replace ext\nassert ensure_extension(\"model\", None) == \"model\"  # no ext\nassert ensure_extension(\"model\", \"\") == \"model\"  # empty ext\nprint(\"ensure_extension tests passed\")",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "funcs.html#datestamp-formatting-and-parsing",
+    "href": "funcs.html#datestamp-formatting-and-parsing",
+    "title": "funcs",
+    "section": "Datestamp formatting and parsing",
+    "text": "Datestamp formatting and parsing\n\nsource\n\nformat_datestamp\n\n format_datestamp (dt:datetime.datetime|None, fmt:str)\n\n*Format datetime to datestamp string.\nParameters: dt: Datetime to format. Uses now() if None. fmt: strftime format string.\nReturns: Formatted datestamp string.*\n\nsource\n\n\nparse_datestamp\n\n parse_datestamp (text:str, fmt:str)\n\n*Parse datestamp string to datetime.\nParameters: text: Datestamp string to parse. fmt: strftime format string used to create the datestamp.\nReturns: Parsed datetime object.\nRaises: ValueError: If text doesn’t match the format.*\n\n# Test datestamp functions\nfrom datetime import datetime\ndt = datetime(2024, 3, 15)\nassert format_datestamp(dt, \"%Y_%m_%d\") == \"2024_03_15\"\nassert parse_datestamp(\"2024_03_15\", \"%Y_%m_%d\") == datetime(2024, 3, 15)\n\n# Test error message\ntry:\n    parse_datestamp(\"bad\", \"%Y_%m_%d\")\n    assert False, \"Should have raised\"\nexcept ValueError as e:\n    assert \"Cannot parse 'bad'\" in str(e)\nprint(\"datestamp tests passed\")\n\ndatestamp tests passed",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "funcs.html#tree-rendering",
+    "href": "funcs.html#tree-rendering",
+    "title": "funcs",
+    "section": "Tree rendering",
+    "text": "Tree rendering\n\nsource\n\nbuild_tree\n\n build_tree (root:pathlib.Path, max_depth:int=4, files:bool=False)\n\n*Build ASCII directory tree representation.\nParameters: root: Root directory to start from. max_depth: Maximum depth to descend (default 4). files: If True, include files; otherwise only directories.\nReturns: ASCII tree string.*\n\n# Test build_tree with a simple example\nimport tempfile, os\nwith tempfile.TemporaryDirectory() as tmp:\n    root = Path(tmp) / \"test_root\"\n    (root / \"subdir1\").mkdir(parents=True)\n    (root / \"subdir2\").mkdir(parents=True)\n    (root / \"subdir1\" / \"nested\").mkdir()\n    (root / \"file.txt\").touch()\n    \n    # Dirs only\n    tree = build_tree(root, max_depth=2, files=False)\n    assert \"subdir1\" in tree\n    assert \"nested\" in tree\n    assert \"file.txt\" not in tree\n    \n    # With files\n    tree_with_files = build_tree(root, max_depth=2, files=True)\n    assert \"file.txt\" in tree_with_files\nprint(\"build_tree tests passed\")\n\nbuild_tree tests passed",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "funcs.html#gitignore-handling",
+    "href": "funcs.html#gitignore-handling",
+    "title": "funcs",
+    "section": "Gitignore handling",
+    "text": "Gitignore handling\n\nsource\n\nrender_gitignore\n\n render_gitignore (existing_text:str, entries:Iterable[str])\n\n*Add entries to gitignore text, avoiding duplicates.\nParameters: existing_text: Current gitignore content. entries: New entries to add.\nReturns: Updated gitignore text with new entries appended.*\n\n# Test render_gitignore\nexisting = \"*.pyc\\n__pycache__/\\n\"\nresult = render_gitignore(existing, [\"checkpoints/\", \"logs/\"])\nassert \"checkpoints/\" in result\nassert \"logs/\" in result\nassert result.count(\"*.pyc\") == 1  # not duplicated\n\n# Idempotent\nresult2 = render_gitignore(result, [\"checkpoints/\", \"logs/\"])\nassert result2 == result\nprint(\"render_gitignore tests passed\")",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "funcs.html#template-specification",
+    "href": "funcs.html#template-specification",
+    "title": "funcs",
+    "section": "Template specification",
+    "text": "Template specification\n\nsource\n\nTemplateSpec\n\n TemplateSpec (name:str,\n               base:Union[str,pathlib.Path,Callable[[Any],pathlib.Path]],\n               pattern:Union[Sequence[str],Mapping[str,str]],\n               root:str='outputs', datestamp:bool|None=None,\n               create:bool|None=None)\n\n*Specification for a path template.\nAttributes: name: Template name for registration/lookup. base: Base path or callable returning base path from ProjectIO. pattern: Sequence of path parts or mapping of key-&gt;filename. root: Which root to resolve relative base against (‘inputs’, ‘outputs’, ‘cache’, ‘custom’). datestamp: Override datestamp behavior (None uses instance default). create: Override auto_create behavior (None uses instance default).*",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "funcs.html#template-resolution",
+    "href": "funcs.html#template-resolution",
+    "title": "funcs",
+    "section": "Template resolution",
+    "text": "Template resolution\n\nsource\n\nresolve_template\n\n resolve_template (spec:__main__.TemplateSpec, io:Any, variant:str|None,\n                   fmt:Mapping[str,str], datestamp:bool|None,\n                   timestamp:datetime.datetime|None)\n\n*Resolve a template spec to concrete path(s).\nParameters: spec: Template specification. io: ProjectIO instance for context. variant: Optional variant name (e.g., run/model name). fmt: Format placeholders for pattern. datestamp: Override datestamp behavior. timestamp: Specific timestamp for datestamp.\nReturns: Single Path if pattern is a sequence, or dict of Paths if pattern is a mapping.*",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "core.html",
+    "href": "core.html",
+    "title": "core",
+    "section": "",
+    "text": "Tracks which script/notebook produced a file.\n\nsource\n\n\n\n ProducerRecord (target:pathlib.Path, producer:pathlib.Path,\n                 kind:Optional[str]=None)\n\n*Record of a file’s producer.\nAttributes: target: Path to the produced file. producer: Path to the script/notebook that produced it. kind: Optional kind/type of output.*",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "core.html#producerrecord",
+    "href": "core.html#producerrecord",
+    "title": "core",
+    "section": "",
+    "text": "Tracks which script/notebook produced a file.\n\nsource\n\n\n\n ProducerRecord (target:pathlib.Path, producer:pathlib.Path,\n                 kind:Optional[str]=None)\n\n*Record of a file’s producer.\nAttributes: target: Path to the produced file. producer: Path to the script/notebook that produced it. kind: Optional kind/type of output.*",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "core.html#mixins",
+    "href": "core.html#mixins",
+    "title": "core",
+    "section": "Mixins",
+    "text": "Mixins\nMixins provide modular functionality grouped by concern.\n\nRootMixin\nHandles root/iroot/oroot cascade, setters, cwd/cwp resolution, auto_create handling.\n\nsource\n\n\nRootMixin\n\n RootMixin (root:Union[str,pathlib.Path,NoneType]=None,\n            iroot:Union[str,pathlib.Path,NoneType]=None,\n            oroot:Union[str,pathlib.Path,NoneType]=None,\n            auto_create:bool=True, **kwargs)\n\nMixin for root path management and cascade behavior.\n\n\nDatestampMixin\nHandles datestamp formatting, parsing, and placement rules.\n\nsource\n\n\nDatestampMixin\n\n DatestampMixin (use_datestamp:bool=True, datestamp_format:str='%Y_%m_%d',\n                 datestamp_in:Literal['dirs','files','both','none']='dirs'\n                 , **kwargs)\n\nMixin for datestamp behavior.\n\n\nTemplateMixin\nHandles template registration and resolution for non-Lightning templates.\n\nsource\n\n\nTemplateMixin\n\n TemplateMixin\n                (templates:Optional[Dict[str,projio.funcs.TemplateSpec]]=N\n                one, **kwargs)\n\nMixin for template registration and path building.\n\n\nLightningMixin\nHandles Lightning-specific paths and helpers.\n\nsource\n\n\nLightningMixin\n\n LightningMixin (**kwargs)\n\nMixin for Lightning-aware paths and helpers.\n\n\nGitignoreMixin\nHandles .gitignore integration.\n\nsource\n\n\nGitignoreMixin\n\n GitignoreMixin\n                 (gitignore:Union[bool,str,pathlib.Path,NoneType]='.gitign\n                 ore', **kwargs)\n\nMixin for gitignore management.\n\n\nTreeMixin\nHandles ASCII tree rendering.\n\nsource\n\n\nTreeMixin\n\n TreeMixin ()\n\nMixin for directory tree display.\n\n\nProducerMixin\nTracks which scripts/notebooks produced which files.\n\nsource\n\n\nProducerMixin\n\n ProducerMixin (**kwargs)\n\nMixin for producer tracking.\n\n\nContextMixin\nProvides context manager and description utilities.\n\nsource\n\n\nContextMixin\n\n ContextMixin ()\n\nMixin for context manager and introspection.",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "core.html#projectio",
+    "href": "core.html#projectio",
+    "title": "core",
+    "section": "ProjectIO",
+    "text": "ProjectIO\nMain class composing all mixins.\n\nsource\n\nProjectIO\n\n ProjectIO (package:str|module|None=None,\n            root:Union[str,pathlib.Path,NoneType]=None,\n            iroot:Union[str,pathlib.Path,NoneType]=None,\n            oroot:Union[str,pathlib.Path,NoneType]=None,\n            auto_create:bool=True, use_datestamp:bool=True,\n            datestamp_format:str='%Y_%m_%d',\n            datestamp_in:Literal['dirs','files','both','none']='dirs',\n            dry_run:bool=False,\n            gitignore:Union[bool,str,pathlib.Path,NoneType]='.gitignore')\n\n*Global path manager with template and Lightning awareness.\nComposes mixins to provide comprehensive path management for Python packages. Inspired by scanpy.settings singleton-style API and pathlib ergonomics.\nParameters: package: Package name or module for resource discovery. root: Shared base path (cascades to iroot/oroot). iroot: Input/data root (default: root). oroot: Output root (default: root). auto_create: Auto-create directories on access (default: True). use_datestamp: Include datestamps in paths (default: True). datestamp_format: strftime format (default: %Y_%m_%d). datestamp_in: Where to add datestamp: ‘dirs’, ‘files’, ‘both’, ‘none’. dry_run: Prevent filesystem mutations (default: False). gitignore: Path to gitignore or True/False (default: ‘.gitignore’).\nExample: &gt;&gt;&gt; io = ProjectIO(root=“/project”, use_datestamp=True) &gt;&gt;&gt; io.checkpoint_path(“model”, run=“exp1”) PosixPath(‘/project/lightning/checkpoints/2024_03_15/exp1/model.ckpt’)*",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "core.html#pio---singleton-proxy",
+    "href": "core.html#pio---singleton-proxy",
+    "title": "core",
+    "section": "PIO - Singleton Proxy",
+    "text": "PIO - Singleton Proxy\nClass-level proxy for convenient access without explicit instantiation.\n\nsource\n\nPIOType\nMetaclass for PIO to enable class-level attribute forwarding.\n\nsource\n\n\nPIO\n\n PIO ()\n\n*Class-level proxy to a global ProjectIO singleton.\nEnables convenient access without explicit instantiation:\n&gt;&gt;&gt; PIO.cache  # returns Path\n&gt;&gt;&gt; PIO.checkpoint_path(\"model\")  # builds path\n&gt;&gt;&gt; PIO.root = \"/new/root\"  # changes default root\nCan subclass to set package-specific defaults:\n&gt;&gt;&gt; class Paths(PIO):\n...     package = \"mypackage\"*",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "core.html#examples",
+    "href": "core.html#examples",
+    "title": "core",
+    "section": "Examples",
+    "text": "Examples",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "core.html#examples-1",
+    "href": "core.html#examples-1",
+    "title": "core",
+    "section": "Examples",
+    "text": "Examples\n\n# Example usage\nimport tempfile\nwith tempfile.TemporaryDirectory() as tmp:\n    io = ProjectIO(root=tmp, auto_create=False, use_datestamp=False)\n    print(f\"Root: {io.root}\")\n    print(f\"Outputs: {io.outputs}\")\n    print(f\"Checkpoints: {io.checkpoints}\")\n    \n    # With datestamp\n    io2 = ProjectIO(root=tmp, auto_create=False, use_datestamp=True, datestamp_in=\"dirs\")\n    io2.datestamp_value = lambda ts=None: \"2024_03_15\"  # Mock for demo\n    print(f\"\\nCheckpoint path: {io2.checkpoint_path('model', run='exp1')}\")\n\nRoot: /private/var/folders/f7/7pcpvrhn0p9gw509gyzmh8fxrwyskv/T/tmpuocx122s\nOutputs: /private/var/folders/f7/7pcpvrhn0p9gw509gyzmh8fxrwyskv/T/tmpuocx122s\nCheckpoints: /private/var/folders/f7/7pcpvrhn0p9gw509gyzmh8fxrwyskv/T/tmpuocx122s/lightning/checkpoints\n\nCheckpoint path: /private/var/folders/f7/7pcpvrhn0p9gw509gyzmh8fxrwyskv/T/tmpuocx122s/lightning/checkpoints/2024_03_15/exp1/model.ckpt",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "projio",
+    "section": "",
+    "text": "Every data science project eventually becomes a mess of hardcoded paths:\n# Scattered across your codebase...\ndata = pd.read_csv(\"/home/user/projects/myproject/data/raw/sales.csv\")\nmodel.save(\"/home/user/projects/myproject/outputs/models/best_model.pt\")\nwriter = SummaryWriter(\"/home/user/projects/myproject/runs/exp_001\")\nresults.to_csv(f\"/home/user/projects/myproject/outputs/{datetime.now():%Y%m%d}_results.csv\")\nThis leads to: - Brittle code that breaks when you move directories or share with collaborators - Inconsistent organization across experiments and team members\n- Lost outputs when you forget which script created which file - Overwritten results when you re-run without changing output paths - Manual directory creation scattered throughout your code",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#the-problem",
+    "href": "index.html#the-problem",
+    "title": "projio",
+    "section": "",
+    "text": "Every data science project eventually becomes a mess of hardcoded paths:\n# Scattered across your codebase...\ndata = pd.read_csv(\"/home/user/projects/myproject/data/raw/sales.csv\")\nmodel.save(\"/home/user/projects/myproject/outputs/models/best_model.pt\")\nwriter = SummaryWriter(\"/home/user/projects/myproject/runs/exp_001\")\nresults.to_csv(f\"/home/user/projects/myproject/outputs/{datetime.now():%Y%m%d}_results.csv\")\nThis leads to: - Brittle code that breaks when you move directories or share with collaborators - Inconsistent organization across experiments and team members\n- Lost outputs when you forget which script created which file - Overwritten results when you re-run without changing output paths - Manual directory creation scattered throughout your code",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#the-solution",
+    "href": "index.html#the-solution",
+    "title": "projio",
+    "section": "The Solution",
+    "text": "The Solution\nprojio centralizes all path management in one place:\nfrom projio import PIO\n\n# Configure once at startup\nPIO.root = \"./my_project\"\n\n# Use everywhere - paths are consistent, directories auto-created\ndata = pd.read_csv(PIO.data_dir / \"raw\" / \"sales.csv\")\nmodel.save(PIO.checkpoint_path(\"best_model\", run=\"exp_001\"))\nwriter = SummaryWriter(PIO.tensorboard_run(run=\"exp_001\"))\nresults.to_csv(PIO.path_for(\"outputs\", \"results\", ext=\".csv\"))  # Auto-datestamped!",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#installation",
+    "href": "index.html#installation",
+    "title": "projio",
+    "section": "Installation",
+    "text": "Installation\npip install projio\nOr install from GitHub:\npip install git+https://github.com/s01st/project-io.git",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#quick-start",
+    "href": "index.html#quick-start",
+    "title": "projio",
+    "section": "Quick Start",
+    "text": "Quick Start\n\nimport tempfile\nfrom projio import ProjectIO, PIO\n\n# Create a ProjectIO instance\ntmp = tempfile.mkdtemp()\nio = ProjectIO(root=tmp, use_datestamp=False)\n\nprint(f\"Root: {io.root}\")\nprint(f\"Outputs: {io.outputs}\")\nprint(f\"Cache: {io.cache}\")\nprint(f\"Checkpoints: {io.checkpoints}\")",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#root-cascade",
+    "href": "index.html#root-cascade",
+    "title": "projio",
+    "section": "1. Root Cascade",
+    "text": "1. Root Cascade\nThe problem: You have input data in one location and want outputs in another, but most paths should share a common base.\nThe solution: Set root once and iroot/oroot follow automatically. Override individually when needed.\n\n# Simple case: everything under one root\nio = ProjectIO(root=tmp, use_datestamp=False)\nprint(f\"Input root: {io.iroot}\")\nprint(f\"Output root: {io.oroot}\")\nprint(f\"Both follow root: {io.iroot == io.oroot == io.root}\")\n\n\n# Advanced case: separate input/output locations\ndata_dir = tempfile.mkdtemp()\nresults_dir = tempfile.mkdtemp()\n\nio = ProjectIO(\n    root=tmp,\n    iroot=data_dir,      # Read data from here\n    oroot=results_dir,   # Write outputs here\n    use_datestamp=False\n)\n\nprint(f\"Data comes from: {io.inputs}\")\nprint(f\"Results go to: {io.outputs}\")\nprint(f\"Config/resources from: {io.root}\")\n\nWhen to use: - Shared datasets on network storage with local output directories - Read-only input mounts (e.g., in containers) - Separating raw data from generated artifacts",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#automatic-datestamps",
+    "href": "index.html#automatic-datestamps",
+    "title": "projio",
+    "section": "2. Automatic Datestamps",
+    "text": "2. Automatic Datestamps\nThe problem: You run an experiment, then run it again next week. The old results are overwritten and lost forever.\nThe solution: Automatic date-based organization keeps every run separate.\n\nio = ProjectIO(root=tmp, use_datestamp=True, datestamp_in=\"dirs\", auto_create=False)\nio.datestamp_value = lambda ts=None: \"2024_03_15\"  # Mock for demo\n\n# Paths automatically include today's date\nprint(f\"Output: {io.path_for('outputs', 'results', ext='.csv')}\")\nprint(f\"Checkpoint: {io.checkpoint_path('model', run='baseline')}\")\n\n\n# Different placement options\nfrom pathlib import Path\nfor placement in [\"dirs\", \"files\", \"both\"]:\n    io = ProjectIO(root=tmp, use_datestamp=True, datestamp_in=placement, auto_create=False)\n    io.datestamp_value = lambda ts=None: \"2024_03_15\"\n    path = io.path_for('outputs', 'results', ext='.csv')\n    # Show path relative to root (resolve symlinks for macOS compatibility)\n    rel = path.relative_to(Path(tmp).resolve())\n    print(f\"{placement:5} -&gt; {rel}\")\n\nWhen to use: - Long-running projects with multiple experiment runs - When you need to compare results across days/weeks - Audit trails for regulatory compliance - Any time you’ve ever overwritten important results",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#unified-path-building",
+    "href": "index.html#unified-path-building",
+    "title": "projio",
+    "section": "3. Unified Path Building",
+    "text": "3. Unified Path Building\nThe problem: Different parts of your codebase use different conventions for organizing files.\nThe solution: One consistent API for all path types with automatic directory creation.\n\nio = ProjectIO(root=tmp, use_datestamp=False, auto_create=True)\n\n# All path types use the same pattern\nprint(\"Path types:\")\nprint(f\"  outputs: {io.path_for('outputs', 'analysis', ext='.csv')}\")\nprint(f\"  cache:   {io.path_for('cache', 'preprocessed', ext='.pkl')}\")\nprint(f\"  logs:    {io.path_for('logs', 'training', ext='.log')}\")\n\n\n# Subdirectories are easy\npath = io.path_for('outputs', 'model', subdir=['experiment_1', 'fold_3'], ext='.pt')\nprint(f\"Nested path: {path}\")\nprint(f\"Directory created: {path.parent.exists()}\")\n\nWhen to use: - Any project with multiple output types - When you want directories created automatically - Team projects needing consistent organization",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#lightning-integration",
+    "href": "index.html#lightning-integration",
+    "title": "projio",
+    "section": "4. Lightning Integration",
+    "text": "4. Lightning Integration\nThe problem: PyTorch Lightning projects need checkpoint directories, TensorBoard logs, and training logs - all organized consistently.\nThe solution: Built-in support for Lightning artifacts with dedicated path methods and callbacks.\n\nio = ProjectIO(root=tmp, use_datestamp=False)\n\n# Lightning-specific paths\nprint(f\"Lightning root: {io.lightning_root}\")\nprint(f\"Checkpoints: {io.checkpoints}\")\nprint(f\"TensorBoard: {io.tensorboard}\")\n\n\n# Organized by run name\nprint(f\"\\nRun-specific paths:\")\nprint(f\"  Checkpoint: {io.checkpoint_path('epoch_10', run='baseline_v2')}\")\nprint(f\"  TensorBoard: {io.tensorboard_run(run='baseline_v2')}\")\nprint(f\"  Log: {io.log_path('metrics', run='baseline_v2')}\")\n\n\n# Use callbacks for seamless integration\nfrom projio.callbacks import IOCheckpointCallback, IOLogCallback\n\nckpt_cb = IOCheckpointCallback(io=io, run=\"experiment_1\")\nlog_cb = IOLogCallback(io=io, run=\"experiment_1\")\n\nprint(f\"Checkpoint callback dir: {ckpt_cb.checkpoint_dir}\")\nprint(f\"Log callback dir: {log_cb.log_dir}\")\n\n# In your training script:\n# trainer = Trainer(callbacks=[ckpt_cb, log_cb])\n\nWhen to use: - Any PyTorch Lightning project - When you need consistent checkpoint/log organization - Multi-run experiments with TensorBoard comparison",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#templates-for-multi-file-datasets",
+    "href": "index.html#templates-for-multi-file-datasets",
+    "title": "projio",
+    "section": "5. Templates for Multi-File Datasets",
+    "text": "5. Templates for Multi-File Datasets\nThe problem: Some datasets consist of multiple related files (e.g., 10X Genomics output has matrix.mtx, barcodes.tsv, features.tsv). Managing these paths individually is tedious.\nThe solution: Templates define file patterns that resolve to multiple paths at once.\n\nio = ProjectIO(root=tmp, use_datestamp=False, auto_create=False)\n\n# Built-in template for single-cell data\npaths = io.template_path(\"filtered_matrix\")\nprint(\"10X Genomics filtered matrix files:\")\nfor name, path in paths.items():\n    print(f\"  {name}: {path.name}\")\n\n\n# Register your own templates\nfrom projio.funcs import TemplateSpec\n\n# Template for a trained model package\nmodel_template = TemplateSpec(\n    name=\"trained_model\",\n    base=\"outputs\",\n    pattern={\n        \"weights\": \"model/weights.pt\",\n        \"config\": \"model/config.json\",\n        \"tokenizer\": \"model/tokenizer.json\",\n        \"metrics\": \"model/eval_metrics.json\"\n    }\n)\nio.register_template(model_template)\n\npaths = io.template_path(\"trained_model\")\nprint(\"\\nTrained model files:\")\nfor name, path in paths.items():\n    # Show path relative to root (resolve symlinks for macOS compatibility)\n    rel = path.relative_to(Path(tmp).resolve())\n    print(f\"  {name}: {rel}\")\n\nWhen to use: - Bioinformatics (10X, FASTQ pairs, BAM+BAI) - ML model artifacts (weights, config, tokenizer) - Any multi-file data format",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#producer-tracking",
+    "href": "index.html#producer-tracking",
+    "title": "projio",
+    "section": "6. Producer Tracking",
+    "text": "6. Producer Tracking\nThe problem: You find an output file but can’t remember which script created it or when.\nThe solution: Track which scripts produce which files for full reproducibility.\n\nfrom pathlib import Path\n\nio = ProjectIO(root=tmp, use_datestamp=False)\n\n# Track what this script produces\noutput_file = io.path_for('outputs', 'processed_data', ext='.parquet')\nio.track_producer(\n    target=output_file,\n    producer=Path('preprocess.py'),\n    kind='data'\n)\n\nmodel_file = io.path_for('outputs', 'model', ext='.pt')\nio.track_producer(\n    target=model_file,\n    producer=Path('train.py'),\n    kind='model'\n)\n\n# Later, find out what produced a file\nprint(\"Who produced the model?\")\nfor record in io.producers_of(model_file):\n    print(f\"  {record.producer.name} ({record.kind})\")\n\n# Or find all outputs from a script\nprint(\"\\nWhat does train.py produce?\")\nfor record in io.outputs_of(Path('train.py')):\n    print(f\"  {record.target.name}\")\n\nWhen to use: - Complex pipelines with many intermediate outputs - Debugging data lineage issues - Reproducibility requirements",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#dry-run-mode",
+    "href": "index.html#dry-run-mode",
+    "title": "projio",
+    "section": "7. Dry-Run Mode",
+    "text": "7. Dry-Run Mode\nThe problem: You want to preview what paths will be created without actually touching the filesystem.\nThe solution: Dry-run mode returns paths but doesn’t create directories or write files.\n\ndry_tmp = tempfile.mkdtemp()\nio = ProjectIO(root=dry_tmp, dry_run=True)\n\n# Get paths without creating anything\ncheckpoint = io.checkpoint_path('model', run='test')\noutput = io.path_for('outputs', 'results', ext='.csv')\n\nprint(f\"Would create checkpoint: {checkpoint}\")\nprint(f\"Would create output: {output}\")\nprint(f\"\\nDirectories actually created: {any(Path(dry_tmp).iterdir())}\")\n\nWhen to use: - Testing path configuration before running experiments - CI/CD pipelines that need to validate paths - Debugging path issues",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#context-manager-for-temporary-overrides",
+    "href": "index.html#context-manager-for-temporary-overrides",
+    "title": "projio",
+    "section": "8. Context Manager for Temporary Overrides",
+    "text": "8. Context Manager for Temporary Overrides\nThe problem: You need to temporarily change settings (e.g., disable datestamps for a specific operation) then restore them.\nThe solution: The using() context manager handles save/restore automatically.\n\nio = ProjectIO(root=tmp, use_datestamp=True, auto_create=True)\n\nprint(f\"Normal mode: datestamp={io.use_datestamp}, auto_create={io.auto_create}\")\n\nwith io.using(use_datestamp=False, auto_create=False):\n    print(f\"Inside context: datestamp={io.use_datestamp}, auto_create={io.auto_create}\")\n    # Operations here use the temporary settings\n\nprint(f\"After context: datestamp={io.use_datestamp}, auto_create={io.auto_create}\")\n\nWhen to use: - Writing config files that shouldn’t be datestamped - Temporary dry-run for validation - Any setting override that should be scoped",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#pio-singleton-for-global-access",
+    "href": "index.html#pio-singleton-for-global-access",
+    "title": "projio",
+    "section": "9. PIO Singleton for Global Access",
+    "text": "9. PIO Singleton for Global Access\nThe problem: You need to access paths from anywhere in your codebase without passing an io instance everywhere.\nThe solution: The PIO class provides singleton-style access, similar to scanpy.settings.\n\nfrom projio import PIO, ProjectIO\n\n# Configure once at the start of your application\nPIO.default = ProjectIO(root=tmp, use_datestamp=False)\n\n# Access from anywhere without passing io around\nprint(f\"PIO.root: {PIO.root}\")\nprint(f\"PIO.outputs: {PIO.outputs}\")\nprint(f\"PIO.checkpoints: {PIO.checkpoints}\")\n\n\n# Methods work too\npath = PIO.path_for('cache', 'embeddings', ext='.npy')\nprint(f\"Cache path via PIO: {path}\")\n\nWhen to use: - Large codebases where dependency injection is impractical - Interactive notebook workflows - Quick scripts where you want minimal boilerplate",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#directory-tree-visualization",
+    "href": "index.html#directory-tree-visualization",
+    "title": "projio",
+    "section": "10. Directory Tree Visualization",
+    "text": "10. Directory Tree Visualization\nThe problem: You want to quickly see what directory structure has been created.\nThe solution: Built-in ASCII tree rendering.\n\n# Create some structure\nviz_tmp = tempfile.mkdtemp()\nio = ProjectIO(root=viz_tmp, use_datestamp=False, auto_create=True)\n\n# Access paths to create directories\n_ = io.outputs\n_ = io.cache  \n_ = io.checkpoints\n_ = io.tensorboard\n_ = io.path_for('outputs', 'exp1', subdir='run_1', ext='.txt')\n_ = io.path_for('outputs', 'exp1', subdir='run_2', ext='.txt')\n\n# Visualize\nprint(io.tree(io.root, max_depth=3))",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#putting-it-all-together",
+    "href": "index.html#putting-it-all-together",
+    "title": "projio",
+    "section": "Putting It All Together",
+    "text": "Putting It All Together\nHere’s a realistic example combining multiple features:\n\nfrom pathlib import Path\nfrom projio import ProjectIO\nfrom projio.callbacks import IOCheckpointCallback, IOLogCallback\n\n# Project setup - configure once\nproject_root = tempfile.mkdtemp()\nio = ProjectIO(\n    root=project_root,\n    use_datestamp=True,\n    datestamp_in=\"dirs\",\n    auto_create=True\n)\nio.datestamp_value = lambda ts=None: \"2024_03_15\"  # Mock for demo\n\nrun_name = \"baseline_v1\"\n\n# Data loading\nraw_data = io.inputs / \"raw\" / \"dataset.csv\"\nprint(f\"Load data from: {raw_data}\")\n\n# Preprocessing with caching\ncache_path = io.path_for('cache', 'preprocessed', ext='.pkl')\nprint(f\"Cache preprocessed data: {cache_path}\")\n\n# Training with Lightning\nckpt_cb = IOCheckpointCallback(io=io, run=run_name)\nlog_cb = IOLogCallback(io=io, run=run_name)\nprint(f\"Checkpoints: {ckpt_cb.checkpoint_dir}\")\nprint(f\"TensorBoard: {log_cb.log_dir}\")\n\n# Save final results\nresults_path = io.path_for('outputs', 'metrics', subdir=run_name, ext='.json')\nprint(f\"Save results: {results_path}\")\n\n# Track what we produced\nio.track_producer(results_path, Path('train.py'), kind='metrics')\n\n# View the structure\nprint(f\"\\nProject structure:\")\nprint(io.tree(io.root))",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#api-reference",
+    "href": "index.html#api-reference",
+    "title": "projio",
+    "section": "API Reference",
+    "text": "API Reference\n\nPath Properties\n\n\n\nProperty\nDescription\n\n\n\n\nroot\nShared base path (cascades to iroot/oroot)\n\n\niroot / inputs\nInput/data root\n\n\noroot / outputs\nOutput root\n\n\ncache\nCache directory\n\n\nlogs\nLogs directory\n\n\ndata_dir\nData directory under inputs\n\n\ndownloads\nDownloads directory under inputs\n\n\nlightning_root\nRoot for Lightning artifacts\n\n\ncheckpoints\nCheckpoints directory\n\n\ntensorboard\nTensorBoard logs directory\n\n\nresources\nPackage resources directory\n\n\n\n\n\nPath Builders\n\n\n\nMethod\nDescription\n\n\n\n\npath_for(kind, name, ...)\nBuild path for a given kind\n\n\ncheckpoint_path(name, ...)\nBuild checkpoint file path\n\n\nlog_path(name, ...)\nBuild log file path\n\n\ntensorboard_run(run, ...)\nBuild TensorBoard run directory\n\n\nresource_path(*parts, ...)\nGet path to a resource file\n\n\ntemplate_path(name, ...)\nResolve a template to paths\n\n\n\n\n\nConfiguration\n\n\n\n\n\n\n\n\nParameter\nDefault\nDescription\n\n\n\n\nroot\ncwd\nBase directory for all paths\n\n\niroot\nroot\nInput/data root (overrides cascade)\n\n\noroot\nroot\nOutput root (overrides cascade)\n\n\nuse_datestamp\nTrue\nEnable automatic datestamps\n\n\ndatestamp_format\n%Y_%m_%d\nstrftime format for dates\n\n\ndatestamp_in\ndirs\nWhere to add datestamp: dirs/files/both/none\n\n\nauto_create\nTrue\nAutomatically create directories\n\n\ndry_run\nFalse\nPreview mode - don’t create anything\n\n\n\n\n\nUtilities\n\n\n\nMethod\nDescription\n\n\n\n\ndatestamp_value()\nGet formatted datestamp string\n\n\nparse_datestamp(text)\nParse datestamp to datetime\n\n\ntree(path, ...)\nRender ASCII directory tree\n\n\ndescribe()\nGet dict of current configuration\n\n\nusing(**overrides)\nContext manager for temp overrides\n\n\ntrack_producer(...)\nRecord file provenance\n\n\nproducers_of(path)\nFind what produced a file\n\n\noutputs_of(script)\nFind what a script produces",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#tutorials",
+    "href": "index.html#tutorials",
+    "title": "projio",
+    "section": "Tutorials",
+    "text": "Tutorials\nFor more detailed examples, see the tutorials:\n\nQuick Start - Basic usage and concepts\nDatestamp Handling - Date-based organization\nLightning Integration - PyTorch Lightning workflows\nTemplates - Multi-file dataset patterns\nAdvanced Features - Producer tracking, dry-run, gitignore",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#developer-guide",
+    "href": "index.html#developer-guide",
+    "title": "projio",
+    "section": "Developer Guide",
+    "text": "Developer Guide\n\nDevelopment Setup\n# Clone the repository\ngit clone https://github.com/s01st/project-io.git\ncd project-io\n\n# Install in development mode\npip install -e .\n\n# Make changes under nbs/ directory\n# ...\n\n# Export and test\nnbdev_prepare",
+    "crumbs": [
+      "projio"
+    ]
+  }
+]

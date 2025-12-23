@@ -1,0 +1,392 @@
+[
+  {
+    "objectID": "01_callbacks.html",
+    "href": "01_callbacks.html",
+    "title": "callbacks",
+    "section": "",
+    "text": "Lightning callbacks for checkpoint and log management via ProjectIO.\n::: {#2 .cell 0=‘h’ 1=‘i’ 2=‘d’ 3=‘e’}\n:::\n::: {#3 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\n:::",
+    "crumbs": [
+      "callbacks"
+    ]
+  },
+  {
+    "objectID": "01_callbacks.html#iocheckpointcallback",
+    "href": "01_callbacks.html#iocheckpointcallback",
+    "title": "callbacks",
+    "section": "IOCheckpointCallback",
+    "text": "IOCheckpointCallback\nA callback that uses ProjectIO to place checkpoints and optionally tracks producers.\n::: {#5 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nclass IOCheckpointCallback(Callback):\n    \"\"\"Lightning callback that uses ProjectIO for checkpoint paths.\n    \n    This callback integrates with ProjectIO to:\n    - Place checkpoints in the configured checkpoint directory\n    - Apply datestamp prefixes/directories as configured\n    - Optionally track which training script produced each checkpoint\n    \n    Parameters:\n        io: ProjectIO instance (default: creates new one).\n        run: Run name for subdirectory organization.\n        filename: Checkpoint filename template with {epoch}, {step}, etc.\n        datestamp: Override datestamp behavior.\n        track_producer: Record producer info for checkpoints.\n        producer_script: Script path to record as producer.\n    \n    Example:\n        &gt;&gt;&gt; callback = IOCheckpointCallback(run=\"experiment_1\")\n        &gt;&gt;&gt; trainer = Trainer(callbacks=[callback])\n    \"\"\"\n    \n    def __init__(\n        self,\n        io: ProjectIO | None = None,\n        run: str | None = None,\n        filename: str = \"{epoch:02d}-{step:06d}\",\n        datestamp: bool | None = None,\n        track_producer: bool = False,\n        producer_script: str | Path | None = None,\n    ):\n        super().__init__()\n        self.io = io or ProjectIO()\n        self.run = run\n        self.filename = filename\n        self.datestamp = datestamp\n        self.track_producer = track_producer\n        self.producer_script = Path(producer_script) if producer_script else None\n        self.cached_checkpoint_dir: Path | None = None\n    \n    @property\n    def checkpoint_dir(self) -&gt; Path:\n        \"\"\"Get the checkpoint directory for this callback.\"\"\"\n        if self.cached_checkpoint_dir is None:\n            self.cached_checkpoint_dir = self.io.tensorboard_run(\n                run=self.run,\n                datestamp=self.datestamp\n            ).parent.parent / \"checkpoints\"\n            if self.run:\n                self.cached_checkpoint_dir = self.cached_checkpoint_dir / self.run\n        return self.cached_checkpoint_dir\n    \n    def get_checkpoint_path(self, epoch: int, step: int, ext: str = \".ckpt\") -&gt; Path:\n        \"\"\"Build checkpoint path for given epoch and step.\n        \n        Parameters:\n            epoch: Current epoch number.\n            step: Current global step.\n            ext: File extension.\n            \n        Returns:\n            Full path to checkpoint file.\n        \"\"\"\n        name = self.filename.format(epoch=epoch, step=step)\n        return self.io.checkpoint_path(\n            name=name,\n            ext=ext,\n            run=self.run,\n            datestamp=self.datestamp\n        )\n    \n    def on_train_start(self, trainer: \"Trainer\", pl_module: \"LightningModule\") -&gt; None:\n        \"\"\"Called when training starts - ensures checkpoint directory exists.\"\"\"\n        if not HAS_LIGHTNING:\n            return\n        # Pre-create the checkpoint directory\n        _ = self.checkpoint_dir\n    \n    def on_save_checkpoint(\n        self,\n        trainer: \"Trainer\",\n        pl_module: \"LightningModule\",\n        checkpoint: dict\n    ) -&gt; None:\n        \"\"\"Called when a checkpoint is saved - track producer if enabled.\"\"\"\n        if not HAS_LIGHTNING or not self.track_producer:\n            return\n        if self.producer_script:\n            # Get the checkpoint path that will be saved\n            epoch = trainer.current_epoch\n            step = trainer.global_step\n            ckpt_path = self.get_checkpoint_path(epoch, step)\n            self.io.track_producer(\n                target=ckpt_path,\n                producer=self.producer_script,\n                kind=\"checkpoint\"\n            )\n:::",
+    "crumbs": [
+      "callbacks"
+    ]
+  },
+  {
+    "objectID": "01_callbacks.html#iologcallback",
+    "href": "01_callbacks.html#iologcallback",
+    "title": "callbacks",
+    "section": "IOLogCallback",
+    "text": "IOLogCallback\nA callback that routes logs and tensorboard runs through ProjectIO.\n::: {#7 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nclass IOLogCallback(Callback):\n    \"\"\"Lightning callback that routes logs through ProjectIO.\n    \n    This callback integrates with ProjectIO to:\n    - Set up TensorBoard log directories\n    - Apply datestamp prefixes/directories as configured\n    - Provide consistent logging paths across experiments\n    \n    Parameters:\n        io: ProjectIO instance (default: creates new one).\n        run: Run name for subdirectory organization.\n        datestamp: Override datestamp behavior.\n    \n    Example:\n        &gt;&gt;&gt; callback = IOLogCallback(run=\"experiment_1\")\n        &gt;&gt;&gt; trainer = Trainer(callbacks=[callback])\n    \"\"\"\n    \n    def __init__(\n        self,\n        io: ProjectIO | None = None,\n        run: str | None = None,\n        datestamp: bool | None = None,\n    ):\n        super().__init__()\n        self.io = io or ProjectIO()\n        self.run = run\n        self.datestamp = datestamp\n        self.cached_log_dir: Path | None = None\n    \n    @property\n    def log_dir(self) -&gt; Path:\n        \"\"\"Get the TensorBoard log directory for this callback.\"\"\"\n        if self.cached_log_dir is None:\n            self.cached_log_dir = self.io.tensorboard_run(\n                run=self.run,\n                datestamp=self.datestamp\n            )\n        return self.cached_log_dir\n    \n    def on_train_start(self, trainer: \"Trainer\", pl_module: \"LightningModule\") -&gt; None:\n        \"\"\"Called when training starts - configure trainer log directory.\"\"\"\n        if not HAS_LIGHTNING:\n            return\n        # Ensure log directory exists\n        log_dir = self.log_dir\n        \n        # Try to configure the trainer's logger if it has a log_dir attribute\n        if hasattr(trainer, 'logger') and trainer.logger is not None:\n            logger = trainer.logger\n            if hasattr(logger, 'log_dir'):\n                # Some loggers allow setting log_dir (external Lightning API)\n                try:\n                    setattr(logger, 'log_dir', str(log_dir))\n                except (AttributeError, TypeError):\n                    pass\n:::",
+    "crumbs": [
+      "callbacks"
+    ]
+  },
+  {
+    "objectID": "01_callbacks.html#integration-example",
+    "href": "01_callbacks.html#integration-example",
+    "title": "callbacks",
+    "section": "Integration Example",
+    "text": "Integration Example\n\n# Example of using both callbacks together\nimport tempfile\n\nwith tempfile.TemporaryDirectory() as tmp:\n    io = ProjectIO(root=tmp, use_datestamp=False, auto_create=True)\n    \n    ckpt_cb = IOCheckpointCallback(io=io, run=\"exp1\")\n    log_cb = IOLogCallback(io=io, run=\"exp1\")\n    \n    print(f\"Checkpoint dir: {ckpt_cb.checkpoint_dir}\")\n    print(f\"Log dir: {log_cb.log_dir}\")\n    print(f\"Checkpoint path (epoch 5, step 1000): {ckpt_cb.get_checkpoint_path(5, 1000)}\")\n\n::: {#10 .cell 0=‘h’ 1=‘i’ 2=‘d’ 3=‘e’}\nimport nbdev; nbdev.nbdev_export()\n:::",
+    "crumbs": [
+      "callbacks"
+    ]
+  },
+  {
+    "objectID": "00_funcs.html",
+    "href": "00_funcs.html",
+    "title": "funcs",
+    "section": "",
+    "text": "Pure functional helpers (side-effect free) used by mixins.\n::: {#2 .cell 0=‘h’ 1=‘i’ 2=‘d’ 3=‘e’}\n:::\n::: {#3 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\n:::\n::: {#4 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\n:::",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "00_funcs.html#path-normalization",
+    "href": "00_funcs.html#path-normalization",
+    "title": "funcs",
+    "section": "Path normalization",
+    "text": "Path normalization\n::: {#6 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\ndef normalize_path(path: StrPath | None, base: Path | None = None) -&gt; Path:\n    \"\"\"Expand user, resolve against base when relative.\n    \n    Parameters:\n        path: Path to normalize (string or Path). If None, returns base or cwd.\n        base: Base path to resolve relative paths against.\n        \n    Returns:\n        Resolved absolute Path.\n    \"\"\"\n    if path is None:\n        if base is None:\n            return Path.cwd()\n        return base\n    p = Path(path).expanduser()\n    if not p.is_absolute() and base is not None:\n        p = base / p\n    return p.resolve(strict=False)\n:::\n\n# Test normalize_path\nassert normalize_path(None) == Path.cwd()\nassert normalize_path(\"foo\", Path(\"/base\")) == Path(\"/base/foo\")\nassert normalize_path(\"/abs/path\", Path(\"/base\")) == Path(\"/abs/path\")\nprint(\"normalize_path tests passed\")",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "00_funcs.html#extension-handling",
+    "href": "00_funcs.html#extension-handling",
+    "title": "funcs",
+    "section": "Extension handling",
+    "text": "Extension handling\n::: {#9 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\ndef ensure_extension(name: str, ext: str | None) -&gt; str:\n    \"\"\"Ensure filename has the given extension.\n    \n    Extension may be provided with or without leading dot.\n    Returns unchanged name if ext is None/empty.\n    \n    Parameters:\n        name: Base filename.\n        ext: Extension to ensure (with or without leading dot).\n        \n    Returns:\n        Filename with proper extension.\n    \"\"\"\n    if not ext:\n        return name\n    ext = ext if ext.startswith(\".\") else f\".{ext}\"\n    if name.endswith(ext):\n        return name\n    # strip any existing extension\n    stem = name.rsplit(\".\", 1)[0] if \".\" in name else name\n    return f\"{stem}{ext}\"\n:::\n\n# Test ensure_extension\nassert ensure_extension(\"model\", \".ckpt\") == \"model.ckpt\"\nassert ensure_extension(\"model\", \"ckpt\") == \"model.ckpt\"  # without dot\nassert ensure_extension(\"model.ckpt\", \".ckpt\") == \"model.ckpt\"  # already has it\nassert ensure_extension(\"model.old\", \".ckpt\") == \"model.ckpt\"  # replace ext\nassert ensure_extension(\"model\", None) == \"model\"  # no ext\nassert ensure_extension(\"model\", \"\") == \"model\"  # empty ext\nprint(\"ensure_extension tests passed\")",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "00_funcs.html#datestamp-formatting-and-parsing",
+    "href": "00_funcs.html#datestamp-formatting-and-parsing",
+    "title": "funcs",
+    "section": "Datestamp formatting and parsing",
+    "text": "Datestamp formatting and parsing\n::: {#12 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\ndef format_datestamp(dt: datetime | None, fmt: str) -&gt; str:\n    \"\"\"Format datetime to datestamp string.\n    \n    Parameters:\n        dt: Datetime to format. Uses now() if None.\n        fmt: strftime format string.\n        \n    Returns:\n        Formatted datestamp string.\n    \"\"\"\n    return (dt or datetime.now()).strftime(fmt)\n:::\n::: {#13 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\ndef parse_datestamp(text: str, fmt: str) -&gt; datetime:\n    \"\"\"Parse datestamp string to datetime.\n    \n    Parameters:\n        text: Datestamp string to parse.\n        fmt: strftime format string used to create the datestamp.\n        \n    Returns:\n        Parsed datetime object.\n        \n    Raises:\n        ValueError: If text doesn't match the format.\n    \"\"\"\n    try:\n        return datetime.strptime(text, fmt)\n    except ValueError as e:\n        raise ValueError(f\"Cannot parse '{text}' with format '{fmt}': {e}\") from e\n:::\n\n# Test datestamp functions\nfrom datetime import datetime\ndt = datetime(2024, 3, 15)\nassert format_datestamp(dt, \"%Y_%m_%d\") == \"2024_03_15\"\nassert parse_datestamp(\"2024_03_15\", \"%Y_%m_%d\") == datetime(2024, 3, 15)\n\n# Test error message\ntry:\n    parse_datestamp(\"bad\", \"%Y_%m_%d\")\n    assert False, \"Should have raised\"\nexcept ValueError as e:\n    assert \"Cannot parse 'bad'\" in str(e)\nprint(\"datestamp tests passed\")",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "00_funcs.html#tree-rendering",
+    "href": "00_funcs.html#tree-rendering",
+    "title": "funcs",
+    "section": "Tree rendering",
+    "text": "Tree rendering\n::: {#16 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\ndef build_tree(root: Path, max_depth: int = 4, files: bool = False) -&gt; str:\n    \"\"\"Build ASCII directory tree representation.\n    \n    Parameters:\n        root: Root directory to start from.\n        max_depth: Maximum depth to descend (default 4).\n        files: If True, include files; otherwise only directories.\n        \n    Returns:\n        ASCII tree string.\n    \"\"\"\n    root = Path(root)\n    lines: list[str] = [root.name or str(root)]\n    \n    def walk(path: Path, prefix: str, depth: int):\n        if depth &gt; max_depth:\n            return\n        try:\n            entries = sorted([p for p in path.iterdir() if files or p.is_dir()])\n        except PermissionError:\n            return\n        for i, child in enumerate(entries):\n            is_last = i == len(entries) - 1\n            connector = \"\\u2514\\u2500\\u2500 \" if is_last else \"\\u251c\\u2500\\u2500 \"\n            lines.append(f\"{prefix}{connector}{child.name}\")\n            if child.is_dir():\n                extension = \"    \" if is_last else \"\\u2502   \"\n                walk(child, prefix + extension, depth + 1)\n    \n    if root.exists():\n        walk(root, \"\", 1)\n    return \"\\n\".join(lines)\n:::\n\n# Test build_tree with a simple example\nimport tempfile, os\nwith tempfile.TemporaryDirectory() as tmp:\n    root = Path(tmp) / \"test_root\"\n    (root / \"subdir1\").mkdir(parents=True)\n    (root / \"subdir2\").mkdir(parents=True)\n    (root / \"subdir1\" / \"nested\").mkdir()\n    (root / \"file.txt\").touch()\n    \n    # Dirs only\n    tree = build_tree(root, max_depth=2, files=False)\n    assert \"subdir1\" in tree\n    assert \"nested\" in tree\n    assert \"file.txt\" not in tree\n    \n    # With files\n    tree_with_files = build_tree(root, max_depth=2, files=True)\n    assert \"file.txt\" in tree_with_files\nprint(\"build_tree tests passed\")",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "00_funcs.html#gitignore-handling",
+    "href": "00_funcs.html#gitignore-handling",
+    "title": "funcs",
+    "section": "Gitignore handling",
+    "text": "Gitignore handling\n::: {#19 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\ndef render_gitignore(existing_text: str, entries: Iterable[str]) -&gt; str:\n    \"\"\"Add entries to gitignore text, avoiding duplicates.\n    \n    Parameters:\n        existing_text: Current gitignore content.\n        entries: New entries to add.\n        \n    Returns:\n        Updated gitignore text with new entries appended.\n    \"\"\"\n    existing = {line.strip() for line in existing_text.splitlines() if line.strip() and not line.strip().startswith(\"#\")}\n    additions = [e for e in entries if e not in existing]\n    if not additions:\n        return existing_text\n    # Preserve original text and append new entries\n    text = existing_text.rstrip()\n    if text:\n        text += \"\\n\"\n    return text + \"\\n\".join(additions) + \"\\n\"\n:::\n\n# Test render_gitignore\nexisting = \"*.pyc\\n__pycache__/\\n\"\nresult = render_gitignore(existing, [\"checkpoints/\", \"logs/\"])\nassert \"checkpoints/\" in result\nassert \"logs/\" in result\nassert result.count(\"*.pyc\") == 1  # not duplicated\n\n# Idempotent\nresult2 = render_gitignore(result, [\"checkpoints/\", \"logs/\"])\nassert result2 == result\nprint(\"render_gitignore tests passed\")",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "00_funcs.html#template-specification",
+    "href": "00_funcs.html#template-specification",
+    "title": "funcs",
+    "section": "Template specification",
+    "text": "Template specification\n::: {#22 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\n@dataclass\nclass TemplateSpec:\n    \"\"\"Specification for a path template.\n    \n    Attributes:\n        name: Template name for registration/lookup.\n        base: Base path or callable returning base path from ProjectIO.\n        pattern: Sequence of path parts or mapping of key-&gt;filename.\n        root: Which root to resolve relative base against ('inputs', 'outputs', 'cache', 'custom').\n        datestamp: Override datestamp behavior (None uses instance default).\n        create: Override auto_create behavior (None uses instance default).\n    \"\"\"\n    name: str\n    base: Union[StrPath, Callable[[Any], Path]]\n    pattern: Sequence[str] | Mapping[str, str]\n    root: str = \"outputs\"\n    datestamp: bool | None = None\n    create: bool | None = None\n:::",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "00_funcs.html#template-resolution",
+    "href": "00_funcs.html#template-resolution",
+    "title": "funcs",
+    "section": "Template resolution",
+    "text": "Template resolution\n::: {#24 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\ndef _resolve_base(spec: TemplateSpec, io: Any) -&gt; Path:\n    \"\"\"Resolve template base path.\"\"\"\n    if callable(spec.base):\n        base = spec.base(io)\n    else:\n        base = Path(spec.base)\n    if not base.is_absolute():\n        if spec.root == \"inputs\":\n            base = io.inputs / base\n        elif spec.root == \"cache\":\n            base = io.cache / base\n        elif spec.root == \"outputs\":\n            base = io.outputs / base\n        else:  # custom\n            base = io.outputs / base\n    return base\n:::\n::: {#25 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\ndef resolve_template(\n    spec: TemplateSpec,\n    io: Any,\n    variant: str | None,\n    fmt: Mapping[str, str],\n    datestamp: bool | None,\n    timestamp: datetime | None\n) -&gt; Path | dict[str, Path]:\n    \"\"\"Resolve a template spec to concrete path(s).\n    \n    Parameters:\n        spec: Template specification.\n        io: ProjectIO instance for context.\n        variant: Optional variant name (e.g., run/model name).\n        fmt: Format placeholders for pattern.\n        datestamp: Override datestamp behavior.\n        timestamp: Specific timestamp for datestamp.\n        \n    Returns:\n        Single Path if pattern is a sequence, or dict of Paths if pattern is a mapping.\n    \"\"\"\n    base = _resolve_base(spec, io)\n    ds = datestamp if datestamp is not None else spec.datestamp\n    if ds is None:\n        ds = getattr(io, \"use_datestamp\", False)\n    \n    # Build format context\n    format_ctx = dict(fmt)\n    if variant is not None:\n        format_ctx.setdefault(\"variant\", variant)\n        format_ctx.setdefault(\"run\", variant)\n    \n    def maybe_datestamp_dir(path: Path) -&gt; Path:\n        if ds and getattr(io, \"datestamp_in\", \"dirs\") in (\"dirs\", \"both\"):\n            return path / format_datestamp(timestamp, io.datestamp_format)\n        return path\n    \n    # Handle mapping pattern (multiple files)\n    if isinstance(spec.pattern, Mapping):\n        out: dict[str, Path] = {}\n        for key, pattern in spec.pattern.items():\n            filename = pattern.format_map(format_ctx) if \"{\" in pattern else pattern\n            target = maybe_datestamp_dir(base) / filename\n            out[key] = target\n            should_create = spec.create if spec.create is not None else io.auto_create\n            if should_create and not io.dry_run:\n                target.parent.mkdir(parents=True, exist_ok=True)\n        return out\n    \n    # Handle sequence pattern (path parts)\n    parts = [p.format_map(format_ctx) if \"{\" in p else p for p in spec.pattern]\n    target = maybe_datestamp_dir(base)\n    if variant:\n        target = target / variant\n    target = target.joinpath(*parts)\n    \n    # Add datestamp to filename if needed\n    if ds and getattr(io, \"datestamp_in\", \"dirs\") in (\"files\", \"both\"):\n        parent = target.parent\n        pref = format_datestamp(timestamp, io.datestamp_format)\n        target = parent / f\"{pref}__{target.name}\"\n    \n    should_create = spec.create if spec.create is not None else io.auto_create\n    if should_create and not io.dry_run:\n        # Create parent for files, or the dir itself for directories\n        if target.suffix:\n            target.parent.mkdir(parents=True, exist_ok=True)\n        else:\n            target.mkdir(parents=True, exist_ok=True)\n    \n    return target\n:::\n::: {#26 .cell 0=‘h’ 1=‘i’ 2=‘d’ 3=‘e’}\nimport nbdev; nbdev.nbdev_export()\n:::",
+    "crumbs": [
+      "funcs"
+    ]
+  },
+  {
+    "objectID": "00_core.html",
+    "href": "00_core.html",
+    "title": "core",
+    "section": "",
+    "text": "Mixins, ProjectIO, and PIO for centralized path management.\n::: {#2 .cell 0=‘h’ 1=‘i’ 2=‘d’ 3=‘e’}\n:::\n::: {#3 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\n:::\n::: {#4 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\n:::",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "00_core.html#producerrecord",
+    "href": "00_core.html#producerrecord",
+    "title": "core",
+    "section": "ProducerRecord",
+    "text": "ProducerRecord\nTracks which script/notebook produced a file.\n::: {#6 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\n@dataclass\nclass ProducerRecord:\n    \"\"\"Record of a file's producer.\n    \n    Attributes:\n        target: Path to the produced file.\n        producer: Path to the script/notebook that produced it.\n        kind: Optional kind/type of output.\n    \"\"\"\n    target: Path\n    producer: Path\n    kind: Optional[str] = None\n:::",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "00_core.html#mixins",
+    "href": "00_core.html#mixins",
+    "title": "core",
+    "section": "Mixins",
+    "text": "Mixins\nMixins provide modular functionality grouped by concern.\n\nRootMixin\nHandles root/iroot/oroot cascade, setters, cwd/cwp resolution, auto_create handling.\n::: {#9 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nclass RootMixin:\n    \"\"\"Mixin for root path management and cascade behavior.\"\"\"\n    \n    def __init__(self, *, root: StrPath | None = None, iroot: StrPath | None = None,\n                 oroot: StrPath | None = None, auto_create: bool = True, **kwargs):\n        super().__init__(**kwargs)\n        self.auto_create = auto_create\n        self.stored_cwd = Path.cwd()\n        self.stored_cwp = Path.cwd()\n        \n        # Track which roots were explicitly set by user\n        self.user_set_iroot = iroot is not None\n        self.user_set_oroot = oroot is not None\n        \n        # Initialize roots\n        self.stored_root = normalize_path(root, self.stored_cwp) if root is not None else self.stored_cwp\n        self.stored_iroot = normalize_path(iroot, self.stored_root) if iroot is not None else self.stored_root\n        self.stored_oroot = normalize_path(oroot, self.stored_root) if oroot is not None else self.stored_root\n    \n    @property\n    def cwd(self) -&gt; Path:\n        \"\"\"Current working directory (captured at import time).\"\"\"\n        return self.stored_cwd\n    \n    @property\n    def cwp(self) -&gt; Path:\n        \"\"\"Current working project directory.\"\"\"\n        return self.stored_cwp\n    \n    @cwp.setter\n    def cwp(self, value: StrPath):\n        \"\"\"Set current working project.\"\"\"\n        self.stored_cwp = normalize_path(value, self.stored_cwd)\n    \n    @property\n    def root(self) -&gt; Path:\n        \"\"\"Shared base for outputs; cascades to iroot/oroot.\"\"\"\n        return self.stored_root\n    \n    @root.setter\n    def root(self, value: StrPath):\n        \"\"\"Set root and cascade to iroot/oroot if not user-set.\"\"\"\n        if not isinstance(value, (str, Path)):\n            raise TypeError(f\"root must be str or Path, got {type(value).__name__}\")\n        self.stored_root = normalize_path(value, self.stored_cwp)\n        # Cascade to iroot/oroot only if not explicitly set by user\n        if not self.user_set_iroot:\n            self.stored_iroot = self.stored_root\n        if not self.user_set_oroot:\n            self.stored_oroot = self.stored_root\n    \n    @property\n    def iroot(self) -&gt; Path:\n        \"\"\"Input/data root.\"\"\"\n        return self.stored_iroot\n    \n    @iroot.setter\n    def iroot(self, value: StrPath):\n        \"\"\"Set input root.\"\"\"\n        if not isinstance(value, (str, Path)):\n            raise TypeError(f\"iroot must be str or Path, got {type(value).__name__}\")\n        self.stored_iroot = normalize_path(value, self.stored_root)\n        self.user_set_iroot = True\n    \n    @property\n    def oroot(self) -&gt; Path:\n        \"\"\"Output root.\"\"\"\n        return self.stored_oroot\n    \n    @oroot.setter\n    def oroot(self, value: StrPath):\n        \"\"\"Set output root.\"\"\"\n        if not isinstance(value, (str, Path)):\n            raise TypeError(f\"oroot must be str or Path, got {type(value).__name__}\")\n        self.stored_oroot = normalize_path(value, self.stored_root)\n        self.user_set_oroot = True\n    \n    @property\n    def inputs(self) -&gt; Path:\n        \"\"\"Alias for iroot.\"\"\"\n        return self.ensure_dir(self.stored_iroot)\n    \n    @property\n    def outputs(self) -&gt; Path:\n        \"\"\"Alias for oroot.\"\"\"\n        return self.ensure_dir(self.stored_oroot)\n    \n    @property\n    def data_dir(self) -&gt; Path:\n        \"\"\"Data directory under inputs.\"\"\"\n        return self.ensure_dir(self.stored_iroot / \"data\")\n    \n    @property\n    def downloads(self) -&gt; Path:\n        \"\"\"Downloads directory under inputs.\"\"\"\n        return self.ensure_dir(self.stored_iroot / \"downloads\")\n    \n    @property\n    def cache(self) -&gt; Path:\n        \"\"\"Cache directory under outputs.\"\"\"\n        return self.ensure_dir(self.stored_oroot / \"cache\")\n    \n    @property\n    def logs(self) -&gt; Path:\n        \"\"\"Logs directory under outputs.\"\"\"\n        return self.ensure_dir(self.stored_oroot / \"logs\")\n    \n    def ensure_dir(self, path: Path) -&gt; Path:\n        \"\"\"Create directory if auto_create and not dry_run.\"\"\"\n        if self.auto_create and not getattr(self, \"dry_run\", False):\n            path.mkdir(parents=True, exist_ok=True)\n        return path\n:::\n\n\nDatestampMixin\nHandles datestamp formatting, parsing, and placement rules.\n::: {#11 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nclass DatestampMixin:\n    \"\"\"Mixin for datestamp behavior.\"\"\"\n    \n    def __init__(self, *, use_datestamp: bool = True,\n                 datestamp_format: str = \"%Y_%m_%d\",\n                 datestamp_in: DatePlacement = \"dirs\", **kwargs):\n        super().__init__(**kwargs)\n        self.use_datestamp = use_datestamp\n        self.datestamp_format = datestamp_format\n        self.datestamp_in = datestamp_in\n    \n    def datestamp_value(self, timestamp: datetime | None = None) -&gt; str:\n        \"\"\"Get formatted datestamp string.\n        \n        Parameters:\n            timestamp: Specific datetime; uses now() if None.\n            \n        Returns:\n            Formatted datestamp string.\n        \"\"\"\n        return format_datestamp(timestamp, self.datestamp_format)\n    \n    def parse_datestamp(self, text: str) -&gt; datetime:\n        \"\"\"Parse datestamp string to datetime.\n        \n        Parameters:\n            text: Datestamp string to parse.\n            \n        Returns:\n            Parsed datetime.\n            \n        Raises:\n            ValueError: If text doesn't match datestamp_format.\n        \"\"\"\n        return parse_ds_func(text, self.datestamp_format)\n:::\n\n\nTemplateMixin\nHandles template registration and resolution for non-Lightning templates.\n::: {#13 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nclass TemplateMixin:\n    \"\"\"Mixin for template registration and path building.\"\"\"\n    \n    def __init__(self, *, templates: Dict[str, TemplateSpec] | None = None, **kwargs):\n        self.templates: Dict[str, TemplateSpec] = templates.copy() if templates else {}\n        super().__init__(**kwargs)\n        self.register_core_templates()\n    \n    def register_template(self, spec: TemplateSpec) -&gt; TemplateSpec:\n        \"\"\"Register a template specification.\n        \n        Parameters:\n            spec: Template specification to register.\n            \n        Returns:\n            The registered spec.\n        \"\"\"\n        self.templates[spec.name] = spec\n        return spec\n    \n    def template_path(self, name: str, variant: str | None = None,\n                      datestamp: bool | None = None,\n                      timestamp: datetime | None = None, **fmt) -&gt; Path | Dict[str, Path]:\n        \"\"\"Resolve a template to a concrete path.\n        \n        Parameters:\n            name: Registered template name.\n            variant: Optional variant (run/model name).\n            datestamp: Override datestamp behavior.\n            timestamp: Specific timestamp for datestamp.\n            **fmt: Format placeholders for pattern.\n            \n        Returns:\n            Path or dict of paths depending on template pattern.\n            \n        Raises:\n            ValueError: If template name not found.\n        \"\"\"\n        if name not in self.templates:\n            raise ValueError(f\"Unknown template: {name}. Available: {list(self.templates.keys())}\")\n        spec = self.templates[name]\n        return resolve_template(spec, self, variant, fmt, datestamp, timestamp)\n    \n    def register_core_templates(self):\n        \"\"\"Register built-in non-Lightning templates.\"\"\"\n        for spec in CORE_TEMPLATES.values():\n            self.register_template(spec)\n:::\n\n\nLightningMixin\nHandles Lightning-specific paths and helpers.\n::: {#15 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nclass LightningMixin:\n    \"\"\"Mixin for Lightning-aware paths and helpers.\"\"\"\n    \n    def __init__(self, **kwargs):\n        super().__init__(**kwargs)\n        self.register_lightning_templates()\n    \n    @property\n    def lightning_root(self) -&gt; Path:\n        \"\"\"Root for Lightning artifacts.\"\"\"\n        return self.ensure_dir(self.outputs / \"lightning\")\n    \n    @property\n    def checkpoints(self) -&gt; Path:\n        \"\"\"Checkpoints directory.\"\"\"\n        return self.ensure_dir(self.lightning_root / \"checkpoints\")\n    \n    @property\n    def tensorboard(self) -&gt; Path:\n        \"\"\"TensorBoard logs directory.\"\"\"\n        return self.ensure_dir(self.lightning_root / \"tensorboard\")\n    \n    @property\n    def lightning_logs(self) -&gt; Path:\n        \"\"\"Lightning logs directory.\"\"\"\n        return self.ensure_dir(self.lightning_root / \"logs\")\n    \n    def checkpoint_path(self, name: str, ext: str = \".ckpt\",\n                        run: str | None = None,\n                        datestamp: bool | None = None) -&gt; Path:\n        \"\"\"Build checkpoint file path.\n        \n        Parameters:\n            name: Checkpoint name (without extension).\n            ext: File extension (default .ckpt).\n            run: Optional run subdirectory.\n            datestamp: Override datestamp behavior.\n            \n        Returns:\n            Full path to checkpoint file.\n        \"\"\"\n        if run and (\"/\" in run or \"\\\\\" in run):\n            raise ValueError(f\"run cannot contain path separators: {run}\")\n        \n        base = self.checkpoints\n        parts: list[str] = []\n        ds = datestamp if datestamp is not None else self.use_datestamp\n        \n        if ds and self.datestamp_in in (\"dirs\", \"both\"):\n            parts.append(self.datestamp_value())\n        if run:\n            parts.append(run)\n        \n        filename = ensure_extension(name, ext)\n        if ds and self.datestamp_in in (\"files\", \"both\"):\n            filename = f\"{self.datestamp_value()}__{filename}\"\n        \n        target = base.joinpath(*parts, filename)\n        if self.auto_create and not self.dry_run:\n            target.parent.mkdir(parents=True, exist_ok=True)\n        return target\n    \n    def log_path(self, name: str, ext: str = \".log\",\n                 run: str | None = None,\n                 datestamp: bool | None = None) -&gt; Path:\n        \"\"\"Build log file path.\n        \n        Parameters:\n            name: Log name (without extension).\n            ext: File extension (default .log).\n            run: Optional run subdirectory.\n            datestamp: Override datestamp behavior.\n            \n        Returns:\n            Full path to log file.\n        \"\"\"\n        if run and (\"/\" in run or \"\\\\\" in run):\n            raise ValueError(f\"run cannot contain path separators: {run}\")\n        \n        base = self.logs\n        parts: list[str] = []\n        ds = datestamp if datestamp is not None else self.use_datestamp\n        \n        if ds and self.datestamp_in in (\"dirs\", \"both\"):\n            parts.append(self.datestamp_value())\n        if run:\n            parts.append(run)\n        \n        filename = ensure_extension(name, ext)\n        if ds and self.datestamp_in in (\"files\", \"both\"):\n            filename = f\"{self.datestamp_value()}__{filename}\"\n        \n        target = base.joinpath(*parts, filename)\n        if self.auto_create and not self.dry_run:\n            target.parent.mkdir(parents=True, exist_ok=True)\n        return target\n    \n    def tensorboard_run(self, run: str | None = None,\n                        datestamp: bool | None = None) -&gt; Path:\n        \"\"\"Build TensorBoard run directory path.\n        \n        Parameters:\n            run: Optional run name.\n            datestamp: Override datestamp behavior.\n            \n        Returns:\n            Path to TensorBoard run directory.\n        \"\"\"\n        if run and (\"/\" in run or \"\\\\\" in run):\n            raise ValueError(f\"run cannot contain path separators: {run}\")\n        \n        base = self.tensorboard\n        parts: list[str] = []\n        ds = datestamp if datestamp is not None else self.use_datestamp\n        \n        if ds and self.datestamp_in in (\"dirs\", \"both\"):\n            parts.append(self.datestamp_value())\n        if run:\n            parts.append(run)\n        \n        target = base.joinpath(*parts)\n        if self.auto_create and not self.dry_run:\n            target.mkdir(parents=True, exist_ok=True)\n        return target\n    \n    def register_lightning_templates(self):\n        \"\"\"Register built-in Lightning templates.\"\"\"\n        for spec in LIGHTNING_TEMPLATES.values():\n            self.register_template(spec)\n:::\n\n\nGitignoreMixin\nHandles .gitignore integration.\n::: {#17 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nclass GitignoreMixin:\n    \"\"\"Mixin for gitignore management.\"\"\"\n    \n    def __init__(self, *, gitignore: bool | StrPath | None = \".gitignore\", **kwargs):\n        super().__init__(**kwargs)\n        self.gitignore = gitignore\n    \n    def ensure_gitignored(self, *kinds: Kind) -&gt; None:\n        \"\"\"Ensure paths for given kinds are in .gitignore.\n        \n        Parameters:\n            *kinds: Path kinds to add to gitignore.\n        \"\"\"\n        if not self.gitignore:\n            return\n        entries = []\n        for kind in kinds:\n            path = self.path_for(kind, create=False)\n            try:\n                rel = path.relative_to(self.cwp)\n                entries.append(str(rel) + \"/\")\n            except ValueError:\n                entries.append(str(path) + \"/\")\n        self.append_gitignore(entries)\n    \n    def append_gitignore(self, entries: Iterable[str]) -&gt; None:\n        \"\"\"Append entries to .gitignore file.\n        \n        Parameters:\n            entries: Lines to add to gitignore.\n        \"\"\"\n        if not self.gitignore:\n            return\n        \n        if self.gitignore is True:\n            gi_path = self.cwp / \".gitignore\"\n        else:\n            gi_path = normalize_path(self.gitignore, self.cwp)\n        \n        text = gi_path.read_text() if gi_path.exists() else \"\"\n        new_text = render_gitignore(text, entries)\n        \n        if new_text != text and not self.dry_run:\n            gi_path.parent.mkdir(parents=True, exist_ok=True)\n            gi_path.write_text(new_text)\n:::\n\n\nTreeMixin\nHandles ASCII tree rendering.\n::: {#19 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nclass TreeMixin:\n    \"\"\"Mixin for directory tree display.\"\"\"\n    \n    def tree(self, path: StrPath | None = None,\n             max_depth: int = 4, files: bool = False) -&gt; str:\n        \"\"\"Render ASCII directory tree.\n        \n        Parameters:\n            path: Root path for tree (default: outputs).\n            max_depth: Maximum depth to display.\n            files: Include files (not just directories).\n            \n        Returns:\n            ASCII tree string.\n        \"\"\"\n        path = Path(path) if path else self.outputs\n        return build_tree(path, max_depth=max_depth, files=files)\n:::\n\n\nProducerMixin\nTracks which scripts/notebooks produced which files.\n::: {#21 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nclass ProducerMixin:\n    \"\"\"Mixin for producer tracking.\"\"\"\n    \n    def __init__(self, **kwargs):\n        super().__init__(**kwargs)\n        self.producers: list[ProducerRecord] = []\n    \n    def track_producer(self, target: StrPath, producer: StrPath, kind: str | None = None) -&gt; None:\n        \"\"\"Record which producer created a target file.\n        \n        Parameters:\n            target: Path to produced file.\n            producer: Path to producing script/notebook.\n            kind: Optional kind/type of output.\n        \"\"\"\n        self.producers.append(ProducerRecord(\n            target=normalize_path(target, self.cwp),\n            producer=normalize_path(producer, self.cwp),\n            kind=kind\n        ))\n    \n    def producers_of(self, path: StrPath) -&gt; List[ProducerRecord]:\n        \"\"\"Get all producer records for a target path.\n        \n        Parameters:\n            path: Target path to look up.\n            \n        Returns:\n            List of producer records for that target.\n        \"\"\"\n        p = normalize_path(path, self.cwp)\n        return [rec for rec in self.producers if rec.target == p]\n    \n    def outputs_of(self, producer: StrPath) -&gt; List[ProducerRecord]:\n        \"\"\"Get all outputs created by a producer.\n        \n        Parameters:\n            producer: Producer path to look up.\n            \n        Returns:\n            List of producer records from that producer.\n        \"\"\"\n        p = normalize_path(producer, self.cwp)\n        return [rec for rec in self.producers if rec.producer == p]\n:::\n\n\nContextMixin\nProvides context manager and description utilities.\n::: {#23 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nclass ContextMixin:\n    \"\"\"Mixin for context manager and introspection.\"\"\"\n    \n    @contextlib.contextmanager\n    def using(self, **overrides):\n        \"\"\"Temporarily override settings.\n        \n        Parameters:\n            **overrides: Attribute names and temporary values.\n            \n        Yields:\n            Self with overridden settings.\n            \n        Example:\n            with io.using(dry_run=True):\n                io.checkpoint_path(\"test\")  # no filesystem changes\n        \"\"\"\n        old = {}\n        for k, v in overrides.items():\n            if not hasattr(self, k):\n                raise AttributeError(f\"Unknown attribute: {k}\")\n            old[k] = getattr(self, k)\n            setattr(self, k, v)\n        try:\n            yield self\n        finally:\n            for k, v in old.items():\n                setattr(self, k, v)\n    \n    def describe(self) -&gt; dict:\n        \"\"\"Describe current configuration.\n        \n        Returns:\n            Dict of configuration values (paths as strings).\n        \"\"\"\n        desc = {\n            \"root\": str(self.root),\n            \"iroot\": str(self.iroot),\n            \"oroot\": str(self.oroot),\n            \"inputs\": str(self.stored_iroot),\n            \"outputs\": str(self.stored_oroot),\n            \"cache\": str(self.stored_oroot / \"cache\"),\n            \"logs\": str(self.stored_oroot / \"logs\"),\n            \"lightning_root\": str(self.stored_oroot / \"lightning\"),\n            \"checkpoints\": str(self.stored_oroot / \"lightning\" / \"checkpoints\"),\n            \"tensorboard\": str(self.stored_oroot / \"lightning\" / \"tensorboard\"),\n            \"auto_create\": self.auto_create,\n            \"use_datestamp\": self.use_datestamp,\n            \"datestamp_format\": self.datestamp_format,\n            \"datestamp_in\": self.datestamp_in,\n            \"dry_run\": self.dry_run,\n        }\n        # Add resources if available\n        if hasattr(self, \"package\"):\n            desc[\"package\"] = str(self.package) if self.package else None\n        # Add producer count\n        if hasattr(self, \"producers\"):\n            desc[\"producer_records\"] = len(self.producers)\n        return desc\n    \n    def __repr__(self) -&gt; str:\n        return f\"ProjectIO(root={self.root}, inputs={self.stored_iroot}, outputs={self.stored_oroot})\"\n:::",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "00_core.html#projectio",
+    "href": "00_core.html#projectio",
+    "title": "core",
+    "section": "ProjectIO",
+    "text": "ProjectIO\nMain class composing all mixins.\n::: {#25 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nclass ProjectIO(RootMixin, DatestampMixin, TemplateMixin,\n                LightningMixin, GitignoreMixin, TreeMixin,\n                ProducerMixin, ContextMixin):\n    \"\"\"Global path manager with template and Lightning awareness.\n    \n    Composes mixins to provide comprehensive path management for Python packages.\n    Inspired by scanpy.settings singleton-style API and pathlib ergonomics.\n    \n    Parameters:\n        package: Package name or module for resource discovery.\n        root: Shared base path (cascades to iroot/oroot).\n        iroot: Input/data root (default: root).\n        oroot: Output root (default: root).\n        auto_create: Auto-create directories on access (default: True).\n        use_datestamp: Include datestamps in paths (default: True).\n        datestamp_format: strftime format (default: %Y_%m_%d).\n        datestamp_in: Where to add datestamp: 'dirs', 'files', 'both', 'none'.\n        dry_run: Prevent filesystem mutations (default: False).\n        gitignore: Path to gitignore or True/False (default: '.gitignore').\n    \n    Example:\n        &gt;&gt;&gt; io = ProjectIO(root=\"/project\", use_datestamp=True)\n        &gt;&gt;&gt; io.checkpoint_path(\"model\", run=\"exp1\")\n        PosixPath('/project/lightning/checkpoints/2024_03_15/exp1/model.ckpt')\n    \"\"\"\n    \n    def __init__(\n        self,\n        package: str | ModuleType | None = None,\n        root: StrPath | None = None,\n        iroot: StrPath | None = None,\n        oroot: StrPath | None = None,\n        auto_create: bool = True,\n        use_datestamp: bool = True,\n        datestamp_format: str = \"%Y_%m_%d\",\n        datestamp_in: DatePlacement = \"dirs\",\n        dry_run: bool = False,\n        gitignore: bool | StrPath | None = \".gitignore\",\n    ):\n        self.package = package\n        self.dry_run = dry_run\n        self.pending_actions: list[str] = []  # for dry_run tracking\n        \n        super().__init__(\n            root=root,\n            iroot=iroot,\n            oroot=oroot,\n            auto_create=auto_create,\n            use_datestamp=use_datestamp,\n            datestamp_format=datestamp_format,\n            datestamp_in=datestamp_in,\n            gitignore=gitignore,\n        )\n    \n    @property\n    def resources(self) -&gt; Path:\n        \"\"\"Package resources directory.\n        \n        Discovered via importlib.resources if package is set,\n        otherwise falls back to cwp/resources.\n        \"\"\"\n        if self.package is None:\n            path = self.cwp / \"resources\"\n        else:\n            try:\n                pkg = self.package if isinstance(self.package, str) else self.package.__name__\n                path = Path(str(resources.files(pkg))) / \"resources\"\n            except Exception:\n                path = self.cwp / \"resources\"\n        if self.auto_create and not self.dry_run:\n            path.mkdir(parents=True, exist_ok=True)\n        return path\n    \n    def resource_path(self, *parts: str, must_exist: bool = True,\n                      create: bool = False) -&gt; Path:\n        \"\"\"Get path to a resource file.\n        \n        Parameters:\n            *parts: Path components under resources dir.\n            must_exist: Raise if path doesn't exist (default: True).\n            create: Create the path if missing.\n            \n        Returns:\n            Full path to resource.\n            \n        Raises:\n            FileNotFoundError: If must_exist and path doesn't exist.\n        \"\"\"\n        path = self.resources.joinpath(*parts)\n        if create and not self.dry_run:\n            if path.suffix:\n                path.parent.mkdir(parents=True, exist_ok=True)\n            else:\n                path.mkdir(parents=True, exist_ok=True)\n        if must_exist and not path.exists():\n            raise FileNotFoundError(f\"Resource not found: {path}\")\n        return path\n    \n    def path_for(self, kind: Kind, name: str = \"\", ext: str | None = None,\n                 subdir: str | Sequence[str] | None = None,\n                 datestamp: bool | None = None,\n                 timestamp: datetime | None = None,\n                 create: bool | None = None) -&gt; Path:\n        \"\"\"Build a path for a given kind.\n        \n        Parameters:\n            kind: One of 'outputs', 'logs', 'checkpoints', 'tensorboard', 'cache', 'data', 'resources'.\n            name: Optional filename.\n            ext: Optional extension.\n            subdir: Optional subdirectory or list of subdirs.\n            datestamp: Override datestamp behavior.\n            timestamp: Specific timestamp for datestamp.\n            create: Override auto_create for this call.\n            \n        Returns:\n            Constructed path.\n            \n        Raises:\n            ValueError: If kind is unknown.\n        \"\"\"\n        base_map = {\n            \"outputs\": self.stored_oroot,\n            \"logs\": self.stored_oroot / \"logs\",\n            \"checkpoints\": self.stored_oroot / \"lightning\" / \"checkpoints\",\n            \"tensorboard\": self.stored_oroot / \"lightning\" / \"tensorboard\",\n            \"cache\": self.stored_oroot / \"cache\",\n            \"data\": self.stored_iroot / \"data\",\n            \"resources\": self.resources,\n        }\n        if kind not in base_map:\n            raise ValueError(f\"Unknown kind: {kind}. Valid: {list(base_map.keys())}\")\n        \n        base = base_map[kind]\n        parts: list[str] = []\n        \n        if subdir:\n            if isinstance(subdir, str):\n                parts.append(subdir)\n            else:\n                parts.extend(subdir)\n        \n        ds = datestamp if datestamp is not None else self.use_datestamp\n        if ds and self.datestamp_in in (\"dirs\", \"both\"):\n            parts.append(self.datestamp_value(timestamp))\n        \n        filename = name\n        if ext:\n            filename = ensure_extension(filename, ext)\n        \n        if filename:\n            target = base.joinpath(*parts, filename)\n            if ds and self.datestamp_in in (\"files\", \"both\"):\n                target = target.with_name(f\"{self.datestamp_value(timestamp)}__{target.name}\")\n        else:\n            target = base.joinpath(*parts) if parts else base\n        \n        should_create = create if create is not None else self.auto_create\n        if should_create and not self.dry_run:\n            if target.suffix:\n                target.parent.mkdir(parents=True, exist_ok=True)\n            else:\n                target.mkdir(parents=True, exist_ok=True)\n        \n        return target\n:::",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "00_core.html#pio---singleton-proxy",
+    "href": "00_core.html#pio---singleton-proxy",
+    "title": "core",
+    "section": "PIO - Singleton Proxy",
+    "text": "PIO - Singleton Proxy\nClass-level proxy for convenient access without explicit instantiation.\n::: {#27 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nclass PIOType(type):\n    \"\"\"Metaclass for PIO to enable class-level attribute forwarding.\"\"\"\n    stored_default: ProjectIO | None = None\n    \n    @property\n    def default(cls) -&gt; ProjectIO:\n        \"\"\"Lazily instantiated default ProjectIO.\"\"\"\n        if cls.stored_default is None:\n            cls.stored_default = ProjectIO()\n        return cls.stored_default\n    \n    @default.setter\n    def default(cls, value: ProjectIO | None):\n        cls.stored_default = value\n    \n    def __getattr__(cls, name: str):\n        return getattr(cls.default, name)\n    \n    def __setattr__(cls, name: str, value):\n        # Handle stored_default and default specially to avoid triggering lazy init\n        if name == \"stored_default\" or name == \"default\":\n            type.__setattr__(cls, \"stored_default\", value)\n        else:\n            setattr(cls.default, name, value)\n:::\n::: {#28 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nclass PIO(metaclass=PIOType):\n    \"\"\"Class-level proxy to a global ProjectIO singleton.\n    \n    Enables convenient access without explicit instantiation:\n    \n        &gt;&gt;&gt; PIO.cache  # returns Path\n        &gt;&gt;&gt; PIO.checkpoint_path(\"model\")  # builds path\n        &gt;&gt;&gt; PIO.root = \"/new/root\"  # changes default root\n    \n    Can subclass to set package-specific defaults:\n    \n        &gt;&gt;&gt; class Paths(PIO):\n        ...     package = \"mypackage\"\n    \"\"\"\n    pass\n:::",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "00_core.html#examples",
+    "href": "00_core.html#examples",
+    "title": "core",
+    "section": "Examples",
+    "text": "Examples",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "00_core.html#examples-1",
+    "href": "00_core.html#examples-1",
+    "title": "core",
+    "section": "Examples",
+    "text": "Examples\n\n# Example usage\nimport tempfile\nwith tempfile.TemporaryDirectory() as tmp:\n    io = ProjectIO(root=tmp, auto_create=False, use_datestamp=False)\n    print(f\"Root: {io.root}\")\n    print(f\"Outputs: {io.outputs}\")\n    print(f\"Checkpoints: {io.checkpoints}\")\n    \n    # With datestamp\n    io2 = ProjectIO(root=tmp, auto_create=False, use_datestamp=True, datestamp_in=\"dirs\")\n    io2.datestamp_value = lambda ts=None: \"2024_03_15\"  # Mock for demo\n    print(f\"\\nCheckpoint path: {io2.checkpoint_path('model', run='exp1')}\")\n\n::: {#33 .cell 0=‘h’ 1=‘i’ 2=‘d’ 3=‘e’}\nimport nbdev; nbdev.nbdev_export()\n:::",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "00__init__.html",
+    "href": "00__init__.html",
+    "title": "init",
+    "section": "",
+    "text": "Expose everything\n\n::: {#2 .cell 0=‘h’ 1=‘i’ 2=‘d’ 3=‘e’}\nfrom nbdev.showdoc import *\n:::\n::: {#3 .cell 0=‘e’ 1=‘x’ 2=‘p’ 3=‘o’ 4=‘r’ 5=‘t’}\nfrom projio.core import *\nfrom projio.funcs import *\nfrom projio.callbacks import *\n:::\n::: {#33 .cell 0=‘h’ 1=‘i’ 2=‘d’ 3=‘e’}\nimport nbdev; nbdev.nbdev_export()\n:::",
+    "crumbs": [
+      "init"
+    ]
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "projio",
+    "section": "",
+    "text": "::: {#0 .cell 0=‘h’ 1=‘i’ 2=‘d’ 3=‘e’}\n:::",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#the-problem",
+    "href": "index.html#the-problem",
+    "title": "projio",
+    "section": "The Problem",
+    "text": "The Problem\nEvery data science project eventually becomes a mess of hardcoded paths:\n# Scattered across your codebase...\ndata = pd.read_csv(\"/home/user/projects/myproject/data/raw/sales.csv\")\nmodel.save(\"/home/user/projects/myproject/outputs/models/best_model.pt\")\nwriter = SummaryWriter(\"/home/user/projects/myproject/runs/exp_001\")\nresults.to_csv(f\"/home/user/projects/myproject/outputs/{datetime.now():%Y%m%d}_results.csv\")\nThis leads to: - Brittle code that breaks when you move directories or share with collaborators - Inconsistent organization across experiments and team members\n- Lost outputs when you forget which script created which file - Overwritten results when you re-run without changing output paths - Manual directory creation scattered throughout your code",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#the-solution",
+    "href": "index.html#the-solution",
+    "title": "projio",
+    "section": "The Solution",
+    "text": "The Solution\nprojio centralizes all path management in one place:\nfrom projio import PIO\n\n# Configure once at startup\nPIO.root = \"./my_project\"\n\n# Use everywhere - paths are consistent, directories auto-created\ndata = pd.read_csv(PIO.data_dir / \"raw\" / \"sales.csv\")\nmodel.save(PIO.checkpoint_path(\"best_model\", run=\"exp_001\"))\nwriter = SummaryWriter(PIO.tensorboard_run(run=\"exp_001\"))\nresults.to_csv(PIO.path_for(\"outputs\", \"results\", ext=\".csv\"))  # Auto-datestamped!",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#installation",
+    "href": "index.html#installation",
+    "title": "projio",
+    "section": "Installation",
+    "text": "Installation\npip install projio\nOr install from GitHub:\npip install git+https://github.com/s01st/project-io.git",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#quick-start",
+    "href": "index.html#quick-start",
+    "title": "projio",
+    "section": "Quick Start",
+    "text": "Quick Start\n\nimport tempfile\nfrom projio import ProjectIO, PIO\n\n# Create a ProjectIO instance\ntmp = tempfile.mkdtemp()\nio = ProjectIO(root=tmp, use_datestamp=False)\n\nprint(f\"Root: {io.root}\")\nprint(f\"Outputs: {io.outputs}\")\nprint(f\"Cache: {io.cache}\")\nprint(f\"Checkpoints: {io.checkpoints}\")",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#root-cascade",
+    "href": "index.html#root-cascade",
+    "title": "projio",
+    "section": "1. Root Cascade",
+    "text": "1. Root Cascade\nThe problem: You have input data in one location and want outputs in another, but most paths should share a common base.\nThe solution: Set root once and iroot/oroot follow automatically. Override individually when needed.\n\n# Simple case: everything under one root\nio = ProjectIO(root=tmp, use_datestamp=False)\nprint(f\"Input root: {io.iroot}\")\nprint(f\"Output root: {io.oroot}\")\nprint(f\"Both follow root: {io.iroot == io.oroot == io.root}\")\n\n\n# Advanced case: separate input/output locations\ndata_dir = tempfile.mkdtemp()\nresults_dir = tempfile.mkdtemp()\n\nio = ProjectIO(\n    root=tmp,\n    iroot=data_dir,      # Read data from here\n    oroot=results_dir,   # Write outputs here\n    use_datestamp=False\n)\n\nprint(f\"Data comes from: {io.inputs}\")\nprint(f\"Results go to: {io.outputs}\")\nprint(f\"Config/resources from: {io.root}\")\n\nWhen to use: - Shared datasets on network storage with local output directories - Read-only input mounts (e.g., in containers) - Separating raw data from generated artifacts",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#automatic-datestamps",
+    "href": "index.html#automatic-datestamps",
+    "title": "projio",
+    "section": "2. Automatic Datestamps",
+    "text": "2. Automatic Datestamps\nThe problem: You run an experiment, then run it again next week. The old results are overwritten and lost forever.\nThe solution: Automatic date-based organization keeps every run separate.\n\nio = ProjectIO(root=tmp, use_datestamp=True, datestamp_in=\"dirs\", auto_create=False)\nio.datestamp_value = lambda ts=None: \"2024_03_15\"  # Mock for demo\n\n# Paths automatically include today's date\nprint(f\"Output: {io.path_for('outputs', 'results', ext='.csv')}\")\nprint(f\"Checkpoint: {io.checkpoint_path('model', run='baseline')}\")\n\n\n# Different placement options\nfrom pathlib import Path\nfor placement in [\"dirs\", \"files\", \"both\"]:\n    io = ProjectIO(root=tmp, use_datestamp=True, datestamp_in=placement, auto_create=False)\n    io.datestamp_value = lambda ts=None: \"2024_03_15\"\n    path = io.path_for('outputs', 'results', ext='.csv')\n    # Show path relative to root (resolve symlinks for macOS compatibility)\n    rel = path.relative_to(Path(tmp).resolve())\n    print(f\"{placement:5} -&gt; {rel}\")\n\nWhen to use: - Long-running projects with multiple experiment runs - When you need to compare results across days/weeks - Audit trails for regulatory compliance - Any time you’ve ever overwritten important results",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#unified-path-building",
+    "href": "index.html#unified-path-building",
+    "title": "projio",
+    "section": "3. Unified Path Building",
+    "text": "3. Unified Path Building\nThe problem: Different parts of your codebase use different conventions for organizing files.\nThe solution: One consistent API for all path types with automatic directory creation.\n\nio = ProjectIO(root=tmp, use_datestamp=False, auto_create=True)\n\n# All path types use the same pattern\nprint(\"Path types:\")\nprint(f\"  outputs: {io.path_for('outputs', 'analysis', ext='.csv')}\")\nprint(f\"  cache:   {io.path_for('cache', 'preprocessed', ext='.pkl')}\")\nprint(f\"  logs:    {io.path_for('logs', 'training', ext='.log')}\")\n\n\n# Subdirectories are easy\npath = io.path_for('outputs', 'model', subdir=['experiment_1', 'fold_3'], ext='.pt')\nprint(f\"Nested path: {path}\")\nprint(f\"Directory created: {path.parent.exists()}\")\n\nWhen to use: - Any project with multiple output types - When you want directories created automatically - Team projects needing consistent organization",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#lightning-integration",
+    "href": "index.html#lightning-integration",
+    "title": "projio",
+    "section": "4. Lightning Integration",
+    "text": "4. Lightning Integration\nThe problem: PyTorch Lightning projects need checkpoint directories, TensorBoard logs, and training logs - all organized consistently.\nThe solution: Built-in support for Lightning artifacts with dedicated path methods and callbacks.\n\nio = ProjectIO(root=tmp, use_datestamp=False)\n\n# Lightning-specific paths\nprint(f\"Lightning root: {io.lightning_root}\")\nprint(f\"Checkpoints: {io.checkpoints}\")\nprint(f\"TensorBoard: {io.tensorboard}\")\n\n\n# Organized by run name\nprint(f\"\\nRun-specific paths:\")\nprint(f\"  Checkpoint: {io.checkpoint_path('epoch_10', run='baseline_v2')}\")\nprint(f\"  TensorBoard: {io.tensorboard_run(run='baseline_v2')}\")\nprint(f\"  Log: {io.log_path('metrics', run='baseline_v2')}\")\n\n\n# Use callbacks for seamless integration\nfrom projio.callbacks import IOCheckpointCallback, IOLogCallback\n\nckpt_cb = IOCheckpointCallback(io=io, run=\"experiment_1\")\nlog_cb = IOLogCallback(io=io, run=\"experiment_1\")\n\nprint(f\"Checkpoint callback dir: {ckpt_cb.checkpoint_dir}\")\nprint(f\"Log callback dir: {log_cb.log_dir}\")\n\n# In your training script:\n# trainer = Trainer(callbacks=[ckpt_cb, log_cb])\n\nWhen to use: - Any PyTorch Lightning project - When you need consistent checkpoint/log organization - Multi-run experiments with TensorBoard comparison",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#templates-for-multi-file-datasets",
+    "href": "index.html#templates-for-multi-file-datasets",
+    "title": "projio",
+    "section": "5. Templates for Multi-File Datasets",
+    "text": "5. Templates for Multi-File Datasets\nThe problem: Some datasets consist of multiple related files (e.g., 10X Genomics output has matrix.mtx, barcodes.tsv, features.tsv). Managing these paths individually is tedious.\nThe solution: Templates define file patterns that resolve to multiple paths at once.\n\nio = ProjectIO(root=tmp, use_datestamp=False, auto_create=False)\n\n# Built-in template for single-cell data\npaths = io.template_path(\"filtered_matrix\")\nprint(\"10X Genomics filtered matrix files:\")\nfor name, path in paths.items():\n    print(f\"  {name}: {path.name}\")\n\n\n# Register your own templates\nfrom projio.funcs import TemplateSpec\n\n# Template for a trained model package\nmodel_template = TemplateSpec(\n    name=\"trained_model\",\n    base=\"outputs\",\n    pattern={\n        \"weights\": \"model/weights.pt\",\n        \"config\": \"model/config.json\",\n        \"tokenizer\": \"model/tokenizer.json\",\n        \"metrics\": \"model/eval_metrics.json\"\n    }\n)\nio.register_template(model_template)\n\npaths = io.template_path(\"trained_model\")\nprint(\"\\nTrained model files:\")\nfor name, path in paths.items():\n    # Show path relative to root (resolve symlinks for macOS compatibility)\n    rel = path.relative_to(Path(tmp).resolve())\n    print(f\"  {name}: {rel}\")\n\nWhen to use: - Bioinformatics (10X, FASTQ pairs, BAM+BAI) - ML model artifacts (weights, config, tokenizer) - Any multi-file data format",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#producer-tracking",
+    "href": "index.html#producer-tracking",
+    "title": "projio",
+    "section": "6. Producer Tracking",
+    "text": "6. Producer Tracking\nThe problem: You find an output file but can’t remember which script created it or when.\nThe solution: Track which scripts produce which files for full reproducibility.\n\nfrom pathlib import Path\n\nio = ProjectIO(root=tmp, use_datestamp=False)\n\n# Track what this script produces\noutput_file = io.path_for('outputs', 'processed_data', ext='.parquet')\nio.track_producer(\n    target=output_file,\n    producer=Path('preprocess.py'),\n    kind='data'\n)\n\nmodel_file = io.path_for('outputs', 'model', ext='.pt')\nio.track_producer(\n    target=model_file,\n    producer=Path('train.py'),\n    kind='model'\n)\n\n# Later, find out what produced a file\nprint(\"Who produced the model?\")\nfor record in io.producers_of(model_file):\n    print(f\"  {record.producer.name} ({record.kind})\")\n\n# Or find all outputs from a script\nprint(\"\\nWhat does train.py produce?\")\nfor record in io.outputs_of(Path('train.py')):\n    print(f\"  {record.target.name}\")\n\nWhen to use: - Complex pipelines with many intermediate outputs - Debugging data lineage issues - Reproducibility requirements",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#dry-run-mode",
+    "href": "index.html#dry-run-mode",
+    "title": "projio",
+    "section": "7. Dry-Run Mode",
+    "text": "7. Dry-Run Mode\nThe problem: You want to preview what paths will be created without actually touching the filesystem.\nThe solution: Dry-run mode returns paths but doesn’t create directories or write files.\n\ndry_tmp = tempfile.mkdtemp()\nio = ProjectIO(root=dry_tmp, dry_run=True)\n\n# Get paths without creating anything\ncheckpoint = io.checkpoint_path('model', run='test')\noutput = io.path_for('outputs', 'results', ext='.csv')\n\nprint(f\"Would create checkpoint: {checkpoint}\")\nprint(f\"Would create output: {output}\")\nprint(f\"\\nDirectories actually created: {any(Path(dry_tmp).iterdir())}\")\n\nWhen to use: - Testing path configuration before running experiments - CI/CD pipelines that need to validate paths - Debugging path issues",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#context-manager-for-temporary-overrides",
+    "href": "index.html#context-manager-for-temporary-overrides",
+    "title": "projio",
+    "section": "8. Context Manager for Temporary Overrides",
+    "text": "8. Context Manager for Temporary Overrides\nThe problem: You need to temporarily change settings (e.g., disable datestamps for a specific operation) then restore them.\nThe solution: The using() context manager handles save/restore automatically.\n\nio = ProjectIO(root=tmp, use_datestamp=True, auto_create=True)\n\nprint(f\"Normal mode: datestamp={io.use_datestamp}, auto_create={io.auto_create}\")\n\nwith io.using(use_datestamp=False, auto_create=False):\n    print(f\"Inside context: datestamp={io.use_datestamp}, auto_create={io.auto_create}\")\n    # Operations here use the temporary settings\n\nprint(f\"After context: datestamp={io.use_datestamp}, auto_create={io.auto_create}\")\n\nWhen to use: - Writing config files that shouldn’t be datestamped - Temporary dry-run for validation - Any setting override that should be scoped",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#pio-singleton-for-global-access",
+    "href": "index.html#pio-singleton-for-global-access",
+    "title": "projio",
+    "section": "9. PIO Singleton for Global Access",
+    "text": "9. PIO Singleton for Global Access\nThe problem: You need to access paths from anywhere in your codebase without passing an io instance everywhere.\nThe solution: The PIO class provides singleton-style access, similar to scanpy.settings.\n\nfrom projio import PIO, ProjectIO\n\n# Configure once at the start of your application\nPIO.default = ProjectIO(root=tmp, use_datestamp=False)\n\n# Access from anywhere without passing io around\nprint(f\"PIO.root: {PIO.root}\")\nprint(f\"PIO.outputs: {PIO.outputs}\")\nprint(f\"PIO.checkpoints: {PIO.checkpoints}\")\n\n\n# Methods work too\npath = PIO.path_for('cache', 'embeddings', ext='.npy')\nprint(f\"Cache path via PIO: {path}\")\n\nWhen to use: - Large codebases where dependency injection is impractical - Interactive notebook workflows - Quick scripts where you want minimal boilerplate",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#directory-tree-visualization",
+    "href": "index.html#directory-tree-visualization",
+    "title": "projio",
+    "section": "10. Directory Tree Visualization",
+    "text": "10. Directory Tree Visualization\nThe problem: You want to quickly see what directory structure has been created.\nThe solution: Built-in ASCII tree rendering.\n\n# Create some structure\nviz_tmp = tempfile.mkdtemp()\nio = ProjectIO(root=viz_tmp, use_datestamp=False, auto_create=True)\n\n# Access paths to create directories\n_ = io.outputs\n_ = io.cache  \n_ = io.checkpoints\n_ = io.tensorboard\n_ = io.path_for('outputs', 'exp1', subdir='run_1', ext='.txt')\n_ = io.path_for('outputs', 'exp1', subdir='run_2', ext='.txt')\n\n# Visualize\nprint(io.tree(io.root, max_depth=3))",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#putting-it-all-together",
+    "href": "index.html#putting-it-all-together",
+    "title": "projio",
+    "section": "Putting It All Together",
+    "text": "Putting It All Together\nHere’s a realistic example combining multiple features:\n\nfrom pathlib import Path\nfrom projio import ProjectIO\nfrom projio.callbacks import IOCheckpointCallback, IOLogCallback\n\n# Project setup - configure once\nproject_root = tempfile.mkdtemp()\nio = ProjectIO(\n    root=project_root,\n    use_datestamp=True,\n    datestamp_in=\"dirs\",\n    auto_create=True\n)\nio.datestamp_value = lambda ts=None: \"2024_03_15\"  # Mock for demo\n\nrun_name = \"baseline_v1\"\n\n# Data loading\nraw_data = io.inputs / \"raw\" / \"dataset.csv\"\nprint(f\"Load data from: {raw_data}\")\n\n# Preprocessing with caching\ncache_path = io.path_for('cache', 'preprocessed', ext='.pkl')\nprint(f\"Cache preprocessed data: {cache_path}\")\n\n# Training with Lightning\nckpt_cb = IOCheckpointCallback(io=io, run=run_name)\nlog_cb = IOLogCallback(io=io, run=run_name)\nprint(f\"Checkpoints: {ckpt_cb.checkpoint_dir}\")\nprint(f\"TensorBoard: {log_cb.log_dir}\")\n\n# Save final results\nresults_path = io.path_for('outputs', 'metrics', subdir=run_name, ext='.json')\nprint(f\"Save results: {results_path}\")\n\n# Track what we produced\nio.track_producer(results_path, Path('train.py'), kind='metrics')\n\n# View the structure\nprint(f\"\\nProject structure:\")\nprint(io.tree(io.root))",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#api-reference",
+    "href": "index.html#api-reference",
+    "title": "projio",
+    "section": "API Reference",
+    "text": "API Reference\n\nPath Properties\n\n\n\nProperty\nDescription\n\n\n\n\nroot\nShared base path (cascades to iroot/oroot)\n\n\niroot / inputs\nInput/data root\n\n\noroot / outputs\nOutput root\n\n\ncache\nCache directory\n\n\nlogs\nLogs directory\n\n\ndata_dir\nData directory under inputs\n\n\ndownloads\nDownloads directory under inputs\n\n\nlightning_root\nRoot for Lightning artifacts\n\n\ncheckpoints\nCheckpoints directory\n\n\ntensorboard\nTensorBoard logs directory\n\n\nresources\nPackage resources directory\n\n\n\n\n\nPath Builders\n\n\n\nMethod\nDescription\n\n\n\n\npath_for(kind, name, ...)\nBuild path for a given kind\n\n\ncheckpoint_path(name, ...)\nBuild checkpoint file path\n\n\nlog_path(name, ...)\nBuild log file path\n\n\ntensorboard_run(run, ...)\nBuild TensorBoard run directory\n\n\nresource_path(*parts, ...)\nGet path to a resource file\n\n\ntemplate_path(name, ...)\nResolve a template to paths\n\n\n\n\n\nConfiguration\n\n\n\n\n\n\n\n\nParameter\nDefault\nDescription\n\n\n\n\nroot\ncwd\nBase directory for all paths\n\n\niroot\nroot\nInput/data root (overrides cascade)\n\n\noroot\nroot\nOutput root (overrides cascade)\n\n\nuse_datestamp\nTrue\nEnable automatic datestamps\n\n\ndatestamp_format\n%Y_%m_%d\nstrftime format for dates\n\n\ndatestamp_in\ndirs\nWhere to add datestamp: dirs/files/both/none\n\n\nauto_create\nTrue\nAutomatically create directories\n\n\ndry_run\nFalse\nPreview mode - don’t create anything\n\n\n\n\n\nUtilities\n\n\n\nMethod\nDescription\n\n\n\n\ndatestamp_value()\nGet formatted datestamp string\n\n\nparse_datestamp(text)\nParse datestamp to datetime\n\n\ntree(path, ...)\nRender ASCII directory tree\n\n\ndescribe()\nGet dict of current configuration\n\n\nusing(**overrides)\nContext manager for temp overrides\n\n\ntrack_producer(...)\nRecord file provenance\n\n\nproducers_of(path)\nFind what produced a file\n\n\noutputs_of(script)\nFind what a script produces",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#tutorials",
+    "href": "index.html#tutorials",
+    "title": "projio",
+    "section": "Tutorials",
+    "text": "Tutorials\nFor more detailed examples, see the tutorials:\n\nQuick Start - Basic usage and concepts\nDatestamp Handling - Date-based organization\nLightning Integration - PyTorch Lightning workflows\nTemplates - Multi-file dataset patterns\nAdvanced Features - Producer tracking, dry-run, gitignore",
+    "crumbs": [
+      "projio"
+    ]
+  },
+  {
+    "objectID": "index.html#developer-guide",
+    "href": "index.html#developer-guide",
+    "title": "projio",
+    "section": "Developer Guide",
+    "text": "Developer Guide\n\nDevelopment Setup\n# Clone the repository\ngit clone https://github.com/s01st/project-io.git\ncd project-io\n\n# Install in development mode\npip install -e .\n\n# Make changes under nbs/ directory\n# ...\n\n# Export and test\nnbdev_prepare",
+    "crumbs": [
+      "projio"
+    ]
+  }
+]

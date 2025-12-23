@@ -1,0 +1,607 @@
+---
+title: projio
+---
+
+
+::: {#0 .cell 0='h' 1='i' 2='d' 3='e'}
+``` {.python .cell-code}
+from projio.core import *
+```
+:::
+
+
+
+> Centralized path management for Python packages with Lightning awareness.
+
+
+## The Problem
+
+Every data science project eventually becomes a mess of hardcoded paths:
+
+```python
+# Scattered across your codebase...
+data = pd.read_csv("/home/user/projects/myproject/data/raw/sales.csv")
+model.save("/home/user/projects/myproject/outputs/models/best_model.pt")
+writer = SummaryWriter("/home/user/projects/myproject/runs/exp_001")
+results.to_csv(f"/home/user/projects/myproject/outputs/{datetime.now():%Y%m%d}_results.csv")
+```
+
+This leads to:
+- **Brittle code** that breaks when you move directories or share with collaborators
+- **Inconsistent organization** across experiments and team members  
+- **Lost outputs** when you forget which script created which file
+- **Overwritten results** when you re-run without changing output paths
+- **Manual directory creation** scattered throughout your code
+
+## The Solution
+
+`projio` centralizes all path management in one place:
+
+```python
+from projio import PIO
+
+# Configure once at startup
+PIO.root = "./my_project"
+
+# Use everywhere - paths are consistent, directories auto-created
+data = pd.read_csv(PIO.data_dir / "raw" / "sales.csv")
+model.save(PIO.checkpoint_path("best_model", run="exp_001"))
+writer = SummaryWriter(PIO.tensorboard_run(run="exp_001"))
+results.to_csv(PIO.path_for("outputs", "results", ext=".csv"))  # Auto-datestamped!
+```
+
+## Installation
+
+```sh
+pip install projio
+```
+
+Or install from GitHub:
+
+```sh
+pip install git+https://github.com/s01st/project-io.git
+```
+
+## Quick Start
+
+::: {#6 .cell}
+``` {.python .cell-code}
+import tempfile
+from projio import ProjectIO, PIO
+
+# Create a ProjectIO instance
+tmp = tempfile.mkdtemp()
+io = ProjectIO(root=tmp, use_datestamp=False)
+
+print(f"Root: {io.root}")
+print(f"Outputs: {io.outputs}")
+print(f"Cache: {io.cache}")
+print(f"Checkpoints: {io.checkpoints}")
+```
+:::
+
+
+---
+
+# Features & Motivation
+
+## 1. Root Cascade
+
+**The problem:** You have input data in one location and want outputs in another, but most paths should share a common base.
+
+**The solution:** Set `root` once and `iroot`/`oroot` follow automatically. Override individually when needed.
+
+::: {#9 .cell}
+``` {.python .cell-code}
+# Simple case: everything under one root
+io = ProjectIO(root=tmp, use_datestamp=False)
+print(f"Input root: {io.iroot}")
+print(f"Output root: {io.oroot}")
+print(f"Both follow root: {io.iroot == io.oroot == io.root}")
+```
+:::
+
+
+::: {#10 .cell}
+``` {.python .cell-code}
+# Advanced case: separate input/output locations
+data_dir = tempfile.mkdtemp()
+results_dir = tempfile.mkdtemp()
+
+io = ProjectIO(
+    root=tmp,
+    iroot=data_dir,      # Read data from here
+    oroot=results_dir,   # Write outputs here
+    use_datestamp=False
+)
+
+print(f"Data comes from: {io.inputs}")
+print(f"Results go to: {io.outputs}")
+print(f"Config/resources from: {io.root}")
+```
+:::
+
+
+**When to use:** 
+- Shared datasets on network storage with local output directories
+- Read-only input mounts (e.g., in containers)
+- Separating raw data from generated artifacts
+
+## 2. Automatic Datestamps
+
+**The problem:** You run an experiment, then run it again next week. The old results are overwritten and lost forever.
+
+**The solution:** Automatic date-based organization keeps every run separate.
+
+::: {#13 .cell}
+``` {.python .cell-code}
+io = ProjectIO(root=tmp, use_datestamp=True, datestamp_in="dirs", auto_create=False)
+io.datestamp_value = lambda ts=None: "2024_03_15"  # Mock for demo
+
+# Paths automatically include today's date
+print(f"Output: {io.path_for('outputs', 'results', ext='.csv')}")
+print(f"Checkpoint: {io.checkpoint_path('model', run='baseline')}")
+```
+:::
+
+
+::: {#14 .cell}
+``` {.python .cell-code}
+# Different placement options
+from pathlib import Path
+for placement in ["dirs", "files", "both"]:
+    io = ProjectIO(root=tmp, use_datestamp=True, datestamp_in=placement, auto_create=False)
+    io.datestamp_value = lambda ts=None: "2024_03_15"
+    path = io.path_for('outputs', 'results', ext='.csv')
+    # Show path relative to root (resolve symlinks for macOS compatibility)
+    rel = path.relative_to(Path(tmp).resolve())
+    print(f"{placement:5} -> {rel}")
+```
+:::
+
+
+**When to use:**
+- Long-running projects with multiple experiment runs
+- When you need to compare results across days/weeks
+- Audit trails for regulatory compliance
+- Any time you've ever overwritten important results
+
+## 3. Unified Path Building
+
+**The problem:** Different parts of your codebase use different conventions for organizing files.
+
+**The solution:** One consistent API for all path types with automatic directory creation.
+
+::: {#17 .cell}
+``` {.python .cell-code}
+io = ProjectIO(root=tmp, use_datestamp=False, auto_create=True)
+
+# All path types use the same pattern
+print("Path types:")
+print(f"  outputs: {io.path_for('outputs', 'analysis', ext='.csv')}")
+print(f"  cache:   {io.path_for('cache', 'preprocessed', ext='.pkl')}")
+print(f"  logs:    {io.path_for('logs', 'training', ext='.log')}")
+```
+:::
+
+
+::: {#18 .cell}
+``` {.python .cell-code}
+# Subdirectories are easy
+path = io.path_for('outputs', 'model', subdir=['experiment_1', 'fold_3'], ext='.pt')
+print(f"Nested path: {path}")
+print(f"Directory created: {path.parent.exists()}")
+```
+:::
+
+
+**When to use:**
+- Any project with multiple output types
+- When you want directories created automatically
+- Team projects needing consistent organization
+
+## 4. Lightning Integration
+
+**The problem:** PyTorch Lightning projects need checkpoint directories, TensorBoard logs, and training logs - all organized consistently.
+
+**The solution:** Built-in support for Lightning artifacts with dedicated path methods and callbacks.
+
+::: {#21 .cell}
+``` {.python .cell-code}
+io = ProjectIO(root=tmp, use_datestamp=False)
+
+# Lightning-specific paths
+print(f"Lightning root: {io.lightning_root}")
+print(f"Checkpoints: {io.checkpoints}")
+print(f"TensorBoard: {io.tensorboard}")
+```
+:::
+
+
+::: {#22 .cell}
+``` {.python .cell-code}
+# Organized by run name
+print(f"\nRun-specific paths:")
+print(f"  Checkpoint: {io.checkpoint_path('epoch_10', run='baseline_v2')}")
+print(f"  TensorBoard: {io.tensorboard_run(run='baseline_v2')}")
+print(f"  Log: {io.log_path('metrics', run='baseline_v2')}")
+```
+:::
+
+
+::: {#23 .cell}
+``` {.python .cell-code}
+# Use callbacks for seamless integration
+from projio.callbacks import IOCheckpointCallback, IOLogCallback
+
+ckpt_cb = IOCheckpointCallback(io=io, run="experiment_1")
+log_cb = IOLogCallback(io=io, run="experiment_1")
+
+print(f"Checkpoint callback dir: {ckpt_cb.checkpoint_dir}")
+print(f"Log callback dir: {log_cb.log_dir}")
+
+# In your training script:
+# trainer = Trainer(callbacks=[ckpt_cb, log_cb])
+```
+:::
+
+
+**When to use:**
+- Any PyTorch Lightning project
+- When you need consistent checkpoint/log organization
+- Multi-run experiments with TensorBoard comparison
+
+## 5. Templates for Multi-File Datasets
+
+**The problem:** Some datasets consist of multiple related files (e.g., 10X Genomics output has `matrix.mtx`, `barcodes.tsv`, `features.tsv`). Managing these paths individually is tedious.
+
+**The solution:** Templates define file patterns that resolve to multiple paths at once.
+
+::: {#26 .cell}
+``` {.python .cell-code}
+io = ProjectIO(root=tmp, use_datestamp=False, auto_create=False)
+
+# Built-in template for single-cell data
+paths = io.template_path("filtered_matrix")
+print("10X Genomics filtered matrix files:")
+for name, path in paths.items():
+    print(f"  {name}: {path.name}")
+```
+:::
+
+
+::: {#27 .cell}
+``` {.python .cell-code}
+# Register your own templates
+from projio.funcs import TemplateSpec
+
+# Template for a trained model package
+model_template = TemplateSpec(
+    name="trained_model",
+    base="outputs",
+    pattern={
+        "weights": "model/weights.pt",
+        "config": "model/config.json",
+        "tokenizer": "model/tokenizer.json",
+        "metrics": "model/eval_metrics.json"
+    }
+)
+io.register_template(model_template)
+
+paths = io.template_path("trained_model")
+print("\nTrained model files:")
+for name, path in paths.items():
+    # Show path relative to root (resolve symlinks for macOS compatibility)
+    rel = path.relative_to(Path(tmp).resolve())
+    print(f"  {name}: {rel}")
+```
+:::
+
+
+**When to use:**
+- Bioinformatics (10X, FASTQ pairs, BAM+BAI)
+- ML model artifacts (weights, config, tokenizer)
+- Any multi-file data format
+
+## 6. Producer Tracking
+
+**The problem:** You find an output file but can't remember which script created it or when.
+
+**The solution:** Track which scripts produce which files for full reproducibility.
+
+::: {#30 .cell}
+``` {.python .cell-code}
+from pathlib import Path
+
+io = ProjectIO(root=tmp, use_datestamp=False)
+
+# Track what this script produces
+output_file = io.path_for('outputs', 'processed_data', ext='.parquet')
+io.track_producer(
+    target=output_file,
+    producer=Path('preprocess.py'),
+    kind='data'
+)
+
+model_file = io.path_for('outputs', 'model', ext='.pt')
+io.track_producer(
+    target=model_file,
+    producer=Path('train.py'),
+    kind='model'
+)
+
+# Later, find out what produced a file
+print("Who produced the model?")
+for record in io.producers_of(model_file):
+    print(f"  {record.producer.name} ({record.kind})")
+
+# Or find all outputs from a script
+print("\nWhat does train.py produce?")
+for record in io.outputs_of(Path('train.py')):
+    print(f"  {record.target.name}")
+```
+:::
+
+
+**When to use:**
+- Complex pipelines with many intermediate outputs
+- Debugging data lineage issues
+- Reproducibility requirements
+
+## 7. Dry-Run Mode
+
+**The problem:** You want to preview what paths will be created without actually touching the filesystem.
+
+**The solution:** Dry-run mode returns paths but doesn't create directories or write files.
+
+::: {#33 .cell}
+``` {.python .cell-code}
+dry_tmp = tempfile.mkdtemp()
+io = ProjectIO(root=dry_tmp, dry_run=True)
+
+# Get paths without creating anything
+checkpoint = io.checkpoint_path('model', run='test')
+output = io.path_for('outputs', 'results', ext='.csv')
+
+print(f"Would create checkpoint: {checkpoint}")
+print(f"Would create output: {output}")
+print(f"\nDirectories actually created: {any(Path(dry_tmp).iterdir())}")
+```
+:::
+
+
+**When to use:**
+- Testing path configuration before running experiments
+- CI/CD pipelines that need to validate paths
+- Debugging path issues
+
+## 8. Context Manager for Temporary Overrides
+
+**The problem:** You need to temporarily change settings (e.g., disable datestamps for a specific operation) then restore them.
+
+**The solution:** The `using()` context manager handles save/restore automatically.
+
+::: {#36 .cell}
+``` {.python .cell-code}
+io = ProjectIO(root=tmp, use_datestamp=True, auto_create=True)
+
+print(f"Normal mode: datestamp={io.use_datestamp}, auto_create={io.auto_create}")
+
+with io.using(use_datestamp=False, auto_create=False):
+    print(f"Inside context: datestamp={io.use_datestamp}, auto_create={io.auto_create}")
+    # Operations here use the temporary settings
+
+print(f"After context: datestamp={io.use_datestamp}, auto_create={io.auto_create}")
+```
+:::
+
+
+**When to use:**
+- Writing config files that shouldn't be datestamped
+- Temporary dry-run for validation
+- Any setting override that should be scoped
+
+## 9. PIO Singleton for Global Access
+
+**The problem:** You need to access paths from anywhere in your codebase without passing an `io` instance everywhere.
+
+**The solution:** The `PIO` class provides singleton-style access, similar to `scanpy.settings`.
+
+::: {#39 .cell}
+``` {.python .cell-code}
+from projio import PIO, ProjectIO
+
+# Configure once at the start of your application
+PIO.default = ProjectIO(root=tmp, use_datestamp=False)
+
+# Access from anywhere without passing io around
+print(f"PIO.root: {PIO.root}")
+print(f"PIO.outputs: {PIO.outputs}")
+print(f"PIO.checkpoints: {PIO.checkpoints}")
+```
+:::
+
+
+::: {#40 .cell}
+``` {.python .cell-code}
+# Methods work too
+path = PIO.path_for('cache', 'embeddings', ext='.npy')
+print(f"Cache path via PIO: {path}")
+```
+:::
+
+
+**When to use:**
+- Large codebases where dependency injection is impractical
+- Interactive notebook workflows
+- Quick scripts where you want minimal boilerplate
+
+## 10. Directory Tree Visualization
+
+**The problem:** You want to quickly see what directory structure has been created.
+
+**The solution:** Built-in ASCII tree rendering.
+
+::: {#43 .cell}
+``` {.python .cell-code}
+# Create some structure
+viz_tmp = tempfile.mkdtemp()
+io = ProjectIO(root=viz_tmp, use_datestamp=False, auto_create=True)
+
+# Access paths to create directories
+_ = io.outputs
+_ = io.cache  
+_ = io.checkpoints
+_ = io.tensorboard
+_ = io.path_for('outputs', 'exp1', subdir='run_1', ext='.txt')
+_ = io.path_for('outputs', 'exp1', subdir='run_2', ext='.txt')
+
+# Visualize
+print(io.tree(io.root, max_depth=3))
+```
+:::
+
+
+---
+
+## Putting It All Together
+
+Here's a realistic example combining multiple features:
+
+::: {#45 .cell}
+``` {.python .cell-code}
+from pathlib import Path
+from projio import ProjectIO
+from projio.callbacks import IOCheckpointCallback, IOLogCallback
+
+# Project setup - configure once
+project_root = tempfile.mkdtemp()
+io = ProjectIO(
+    root=project_root,
+    use_datestamp=True,
+    datestamp_in="dirs",
+    auto_create=True
+)
+io.datestamp_value = lambda ts=None: "2024_03_15"  # Mock for demo
+
+run_name = "baseline_v1"
+
+# Data loading
+raw_data = io.inputs / "raw" / "dataset.csv"
+print(f"Load data from: {raw_data}")
+
+# Preprocessing with caching
+cache_path = io.path_for('cache', 'preprocessed', ext='.pkl')
+print(f"Cache preprocessed data: {cache_path}")
+
+# Training with Lightning
+ckpt_cb = IOCheckpointCallback(io=io, run=run_name)
+log_cb = IOLogCallback(io=io, run=run_name)
+print(f"Checkpoints: {ckpt_cb.checkpoint_dir}")
+print(f"TensorBoard: {log_cb.log_dir}")
+
+# Save final results
+results_path = io.path_for('outputs', 'metrics', subdir=run_name, ext='.json')
+print(f"Save results: {results_path}")
+
+# Track what we produced
+io.track_producer(results_path, Path('train.py'), kind='metrics')
+
+# View the structure
+print(f"\nProject structure:")
+print(io.tree(io.root))
+```
+:::
+
+
+---
+
+## API Reference
+
+### Path Properties
+
+| Property | Description |
+|----------|-------------|
+| `root` | Shared base path (cascades to iroot/oroot) |
+| `iroot` / `inputs` | Input/data root |
+| `oroot` / `outputs` | Output root |
+| `cache` | Cache directory |
+| `logs` | Logs directory |
+| `data_dir` | Data directory under inputs |
+| `downloads` | Downloads directory under inputs |
+| `lightning_root` | Root for Lightning artifacts |
+| `checkpoints` | Checkpoints directory |
+| `tensorboard` | TensorBoard logs directory |
+| `resources` | Package resources directory |
+
+### Path Builders
+
+| Method | Description |
+|--------|-------------|
+| `path_for(kind, name, ...)` | Build path for a given kind |
+| `checkpoint_path(name, ...)` | Build checkpoint file path |
+| `log_path(name, ...)` | Build log file path |
+| `tensorboard_run(run, ...)` | Build TensorBoard run directory |
+| `resource_path(*parts, ...)` | Get path to a resource file |
+| `template_path(name, ...)` | Resolve a template to paths |
+
+### Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `root` | cwd | Base directory for all paths |
+| `iroot` | root | Input/data root (overrides cascade) |
+| `oroot` | root | Output root (overrides cascade) |
+| `use_datestamp` | True | Enable automatic datestamps |
+| `datestamp_format` | `%Y_%m_%d` | strftime format for dates |
+| `datestamp_in` | `dirs` | Where to add datestamp: dirs/files/both/none |
+| `auto_create` | True | Automatically create directories |
+| `dry_run` | False | Preview mode - don't create anything |
+
+### Utilities
+
+| Method | Description |
+|--------|-------------|
+| `datestamp_value()` | Get formatted datestamp string |
+| `parse_datestamp(text)` | Parse datestamp to datetime |
+| `tree(path, ...)` | Render ASCII directory tree |
+| `describe()` | Get dict of current configuration |
+| `using(**overrides)` | Context manager for temp overrides |
+| `track_producer(...)` | Record file provenance |
+| `producers_of(path)` | Find what produced a file |
+| `outputs_of(script)` | Find what a script produces |
+
+---
+
+## Tutorials
+
+For more detailed examples, see the tutorials:
+
+- [Quick Start](../tutorials/01_quickstart.ipynb) - Basic usage and concepts
+- [Datestamp Handling](../tutorials/02_datestamp.ipynb) - Date-based organization
+- [Lightning Integration](../tutorials/03_lightning.ipynb) - PyTorch Lightning workflows
+- [Templates](../tutorials/04_templates.ipynb) - Multi-file dataset patterns
+- [Advanced Features](../tutorials/05_advanced.ipynb) - Producer tracking, dry-run, gitignore
+
+---
+
+## Developer Guide
+
+### Development Setup
+
+```sh
+# Clone the repository
+git clone https://github.com/s01st/project-io.git
+cd project-io
+
+# Install in development mode
+pip install -e .
+
+# Make changes under nbs/ directory
+# ...
+
+# Export and test
+nbdev_prepare
+```
+
+
