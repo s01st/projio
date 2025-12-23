@@ -1,0 +1,9 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "projio"
+  site-url: "https://s01st.github.io/project-io"
+  description: ""
+  repo-branch: main
+  repo-url: "https://github.com/s01st/project-io"
